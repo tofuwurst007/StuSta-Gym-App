@@ -1,0 +1,223 @@
+You are to design a complete product specification for a gym management application.
+The app has three roles: Admin, Supervisor, and Member.
+The design must be extremely detailed, internally consistent, and inspired by the minimalistic, privacy‑respecting design philosophy of the messenger “Signal” (clean UI, simple flows, no clutter, strong structure).
+
+Use the following requirements exactly:
+
+1. Roles & Authentication
+Roles
+Member:
+
+Can view opening hours
+
+Can view their digital member card
+
+Is also a supervisor if promoted
+
+Supervisor:
+
+Has all member capabilities
+
+Can claim predefined shift blocks
+
+Can open the gym spontaneously outside the shiftplan by setting a temporary “open period”
+
+Admin:
+
+Can edit user profiles
+
+Can promote/demote users
+
+Can delete users
+
+Can create and edit the weekly shiftplan
+
+Can override shifts
+
+Can view attendance logs
+
+Authentication
+Login is via Google Login only
+
+Roles are assigned manually by admins
+
+No 2FA required
+
+2. Shiftplan Logic
+Shiftplan Structure
+The shiftplan is a weekly repeating template
+
+Admins define predefined shift blocks (e.g., 06:00–09:00, 09:00–12:00, etc.)
+
+Supervisors can only claim predefined blocks
+
+Two supervisors cannot claim the same block
+
+Supervisors may also open the gym spontaneously outside the shiftplan by setting a custom time window
+
+Opening Hours Calculation
+The gym is open only when at least one supervisor is present
+
+Opening hours are automatically calculated from:
+
+Claimed shift blocks
+
+Spontaneous supervisor openings
+
+If a supervisor cancels a shift last minute:
+
+Members are notified
+
+Admins are notified
+
+3. Digital Member Card
+Every user (member or supervisor) has a digital card containing ONLY:
+
+Name
+
+House and room number
+
+Date of birth
+
+Membership start date
+
+Membership end date
+
+Additional rules:
+
+The card is not scannable
+
+When a member becomes a supervisor, they keep the same card
+
+4. Notifications
+The system must send notifications to:
+
+Members when opening hours change
+
+Supervisors when shifts are unclaimed
+
+Admins when supervisors cancel a shift
+
+5. Security Requirements
+No end‑to‑end encryption required
+
+No cryptographic signing of member cards
+
+Still follow a privacy‑respecting, minimalistic design philosophy inspired by Signal
+
+Clean UI
+
+Minimal data collection
+
+Clear user control
+
+No unnecessary clutter
+
+6. Additional Requirements
+Use your best judgment to fill in any missing details.
+Your output must include:
+
+A. Full Product Description
+Clear explanation of the app
+
+User flows for each role
+
+UX philosophy inspired by Signal
+
+B. Detailed Feature Breakdown
+All screens
+
+All actions
+
+All edge cases
+
+C. System Architecture
+Frontend
+
+Backend
+
+Database schema
+
+API endpoints
+
+Role‑based access control model
+
+D. Data Models
+Users
+
+Shifts
+
+Opening hours
+
+Digital cards
+
+Notifications
+
+Attendance logs
+
+E. UI/UX Design Specification
+Screen‑by‑screen wireframe descriptions
+
+Navigation structure
+
+Color palette
+
+Typography
+
+Component library
+
+Interaction patterns
+
+Empty states, error states, loading states
+
+F. Logic & Algorithms
+Opening hours calculation
+
+Shift claiming rules
+
+Conflict prevention (no double claiming)
+
+Spontaneous opening logic
+
+Notification triggers
+
+G. Admin Panel Specification
+User management
+
+Shiftplan editor
+
+Attendance logs
+
+Overrides
+
+H. Supervisor Tools
+Shift claiming
+
+Shift cancellation
+
+Spontaneous opening creation
+
+I. Member Experience
+Opening hours view
+
+Digital card view
+
+Notification settings
+
+J. Non‑Functional Requirements
+Performance
+
+Reliability
+
+Privacy
+
+Maintainability
+
+Scalability
+
+K. Optional Enhancements (use your judgment)
+Analytics
+
+Audit logs
+
+Dark mode
