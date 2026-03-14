@@ -1,0 +1,29 @@
+app = "stusta-gym-backend"
+primary_region = "fra"  # Frankfurt — closest to Munich/StuSta
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8090"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8090
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [services.concurrency]
+    type = "requests"
+    hard_limit = 100
+    soft_limit = 80
+
+[[mounts]]
+  source = "pb_data"
+  destination = "/pb/pb_data"
