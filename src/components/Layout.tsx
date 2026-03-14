@@ -3,8 +3,9 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useApp } from '../contexts/AppContext';
 import { useTheme } from '../contexts/ThemeContext';
+import AvatarPicker, { AvatarDisplay } from './AvatarPicker';
 
-// ── Inline SVG icon set ───────────────────────────────────────────
+// ── Inline SVG icon set ───────────────────────────────────────────────────────
 const Icon = {
   home: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -78,48 +79,82 @@ const Icon = {
       <line x1="21" y1="12" x2="9" y2="12"/>
     </svg>
   ),
+  lock: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </svg>
+  ),
+  cookie: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/>
+      <path d="M8.5 8.5v.01M16 15.5v.01M12 12v.01"/>
+    </svg>
+  ),
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, updateCurrentUser } = useAuth();
   const { state } = useApp();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen]         = useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
-  if (!currentUser) return null;
-
-  const unread = state.notifications.filter(
-    n => !n.read && (n.userId === 'all' || n.userId === currentUser.id)
+  const isGuest = !currentUser;
+  const unread  = isGuest ? 0 : state.notifications.filter(
+    n => !n.read && (n.userId === 'all' || n.userId === currentUser!.id)
   ).length;
 
-  const isSup   = currentUser.role === 'supervisor' || currentUser.role === 'admin';
-  const isAdmin = currentUser.role === 'admin';
+  const isSup   = !isGuest && (currentUser!.role === 'supervisor' || currentUser!.role === 'admin');
+  const isAdmin = !isGuest && currentUser!.role === 'admin';
 
   const handleLogout = () => { logout(); navigate('/login'); };
   const closeDrawer  = () => setDrawerOpen(false);
 
+  // ── Nav links ───────────────────────────────────────────────────────────────
   const navContent = (onClick?: () => void) => (
     <>
       <div className="nav-section">
         <p className="nav-label">General</p>
+
         <NavLink to="/" end onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
           <span className="nav-icon">{Icon.home}</span>
           <span className="nav-text">Opening Hours</span>
         </NavLink>
+
         <NavLink to="/calendar" onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
           <span className="nav-icon">{Icon.calendar}</span>
           <span className="nav-text">Weekly Calendar</span>
         </NavLink>
-        <NavLink to="/card" onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
-          <span className="nav-icon">{Icon.card}</span>
-          <span className="nav-text">My Card</span>
-        </NavLink>
-        <NavLink to="/notifications" onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
-          <span className={`nav-icon ${unread > 0 ? 'nav-icon-ring' : ''}`}>{Icon.bell}</span>
-          <span className="nav-text">Notifications</span>
-          {unread > 0 && <span className="nav-badge">{unread}</span>}
-        </NavLink>
+
+        {/* Auth-gated items — shown as locked when guest */}
+        {isGuest ? (
+          <>
+            <div className="nav-link nav-link-locked" title="Sign in to access">
+              <span className="nav-icon">{Icon.card}</span>
+              <span className="nav-text">My Card</span>
+              <span className="nav-lock">{Icon.lock}</span>
+            </div>
+            <div className="nav-link nav-link-locked" title="Sign in to access">
+              <span className="nav-icon">{Icon.bell}</span>
+              <span className="nav-text">Notifications</span>
+              <span className="nav-lock">{Icon.lock}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <NavLink to="/card" onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
+              <span className="nav-icon">{Icon.card}</span>
+              <span className="nav-text">My Card</span>
+            </NavLink>
+            <NavLink to="/notifications" onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
+              <span className={`nav-icon ${unread > 0 ? 'nav-icon-ring' : ''}`}>{Icon.bell}</span>
+              <span className="nav-text">Notifications</span>
+              {unread > 0 && <span className="nav-badge">{unread}</span>}
+            </NavLink>
+          </>
+        )}
       </div>
 
       {isSup && (
@@ -156,27 +191,66 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     </>
   );
 
+  // ── Sidebar / drawer footer ─────────────────────────────────────────────────
   const sidebarFooter = (onLogout?: () => void) => (
     <div className="sidebar-bottom">
       <button className="theme-toggle-row" onClick={toggleTheme} aria-label="Toggle theme">
         <span className="nav-icon nav-icon-sm">{theme === 'dark' ? Icon.sun : Icon.moon}</span>
         <span className="theme-toggle-label">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
       </button>
-      <div className="sidebar-user-card">
-        <div className="sidebar-avatar">{currentUser.avatarInitials}</div>
-        <div className="sidebar-user-info">
-          <p className="sidebar-name">{currentUser.name}</p>
-          <p className={`sidebar-role-tag role-${currentUser.role}`}>{currentUser.role}</p>
+
+      {/* Cookie settings */}
+      <button
+        className="theme-toggle-row"
+        onClick={() => import('klaro').then(K => (K as { show?: () => void }).show?.())}
+        aria-label="Cookie settings"
+      >
+        <span className="nav-icon nav-icon-sm">{Icon.cookie}</span>
+        <span className="theme-toggle-label">Cookie settings</span>
+      </button>
+
+      {/* User card / guest CTA */}
+      {isGuest ? (
+        <div className="sidebar-guest-card">
+          <p className="sidebar-guest-text">You're browsing as a guest</p>
+          <button className="btn btn-primary sidebar-signin-btn" onClick={() => navigate('/login')}>
+            Sign in
+          </button>
         </div>
-        <button className="btn-icon-sm" onClick={onLogout ?? handleLogout} title="Sign out">
-          <span style={{ width: 14, height: 14, display: 'flex' }}>{Icon.logout}</span>
-        </button>
-      </div>
+      ) : (
+        <div className="sidebar-user-card">
+          {/* Clickable avatar → opens picker */}
+          <button
+            className="sidebar-avatar sidebar-avatar-btn"
+            onClick={() => setShowAvatarPicker(true)}
+            title="Change avatar"
+            aria-label="Change avatar"
+          >
+            <AvatarDisplay avatarId={currentUser!.avatarId} initials={currentUser!.avatarInitials} size={34} />
+          </button>
+          <div className="sidebar-user-info">
+            <p className="sidebar-name">{currentUser!.name}</p>
+            <p className={`sidebar-role-tag role-${currentUser!.role}`}>{currentUser!.role}</p>
+          </div>
+          <button className="btn-icon-sm" onClick={onLogout ?? handleLogout} title="Sign out">
+            <span style={{ width: 14, height: 14, display: 'flex' }}>{Icon.logout}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 
   return (
     <div className="app-shell">
+      {/* Avatar picker modal */}
+      {showAvatarPicker && currentUser && (
+        <AvatarPicker
+          current={currentUser.avatarId}
+          onSelect={id => updateCurrentUser({ avatarId: id })}
+          onClose={() => setShowAvatarPicker(false)}
+        />
+      )}
+
       <header className="topbar">
         <div className="topbar-left">
           <button className="menu-btn" onClick={() => setDrawerOpen(true)} aria-label="Open menu">
@@ -187,14 +261,33 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="topbar-logo-text">StuSta Gym</span>
           </span>
         </div>
+
         <div className="topbar-right">
-          <NavLink to="/notifications" className="notif-btn">
-            {Icon.bell}
-            {unread > 0 && <span className="notif-badge">{unread}</span>}
-          </NavLink>
-          <div className="topbar-avatar-wrap">
-            <div className="topbar-avatar">{currentUser.avatarInitials}</div>
-          </div>
+          {/* Notification bell — hidden for guests */}
+          {!isGuest && (
+            <NavLink to="/notifications" className="notif-btn" aria-label="Notifications">
+              {Icon.bell}
+              {unread > 0 && <span className="notif-badge">{unread}</span>}
+            </NavLink>
+          )}
+
+          {/* Avatar / sign-in CTA in topbar */}
+          {isGuest ? (
+            <button className="btn btn-primary topbar-signin-btn" onClick={() => navigate('/login')}>
+              Sign in
+            </button>
+          ) : (
+            <button
+              className="topbar-avatar-wrap topbar-avatar-btn"
+              onClick={() => setShowAvatarPicker(true)}
+              aria-label="Change avatar"
+              title="Change avatar"
+            >
+              <div className="topbar-avatar">
+                <AvatarDisplay avatarId={currentUser!.avatarId} initials={currentUser!.avatarInitials} size={30} />
+              </div>
+            </button>
+          )}
         </div>
       </header>
 

@@ -1,9 +1,12 @@
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppProvider } from './contexts/AppContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import GdprConsent from './components/GdprConsent';
 import Layout from './components/Layout';
 import Login from './pages/Login';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import Home from './pages/Home';
 import MyCard from './pages/MyCard';
 import Notifications from './pages/Notifications';
@@ -14,11 +17,29 @@ import UserManagement from './pages/admin/UserManagement';
 import ShiftplanEditor from './pages/admin/ShiftplanEditor';
 import AttendanceLogs from './pages/admin/AttendanceLogs';
 
-function ProtectedRoute({ children, requireRole }: { children: React.ReactNode; requireRole?: 'supervisor' | 'admin' }) {
+// ─── Route guard ──────────────────────────────────────────────────────────────
+// requireAuth:  redirect guests to /login (preserving the intended destination)
+// requireRole:  redirect insufficiently-privileged users to /
+function ProtectedRoute({
+  children,
+  requireAuth = true,
+  requireRole,
+}: {
+  children: React.ReactNode;
+  requireAuth?: boolean;
+  requireRole?: 'supervisor' | 'admin';
+}) {
   const { currentUser } = useAuth();
-  if (!currentUser) return <Navigate to="/login" replace />;
-  if (requireRole === 'supervisor' && currentUser.role === 'member') return <Navigate to="/" replace />;
-  if (requireRole === 'admin' && currentUser.role !== 'admin') return <Navigate to="/" replace />;
+
+  if (requireAuth && !currentUser)
+    return <Navigate to={`/login?next=${encodeURIComponent(window.location.pathname)}`} replace />;
+
+  if (requireRole === 'supervisor' && currentUser?.role === 'member')
+    return <Navigate to="/" replace />;
+
+  if (requireRole === 'admin' && currentUser?.role !== 'admin')
+    return <Navigate to="/" replace />;
+
   return <Layout>{children}</Layout>;
 }
 
@@ -27,16 +48,27 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/login" element={currentUser ? <Navigate to="/" replace /> : <Login />} />
-      <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-      <Route path="/calendar" element={<ProtectedRoute><WeeklyCalendar /></ProtectedRoute>} />
-      <Route path="/card" element={<ProtectedRoute><MyCard /></ProtectedRoute>} />
+      {/* Public — no auth required */}
+      <Route path="/login"   element={currentUser ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+
+      {/* Guest-accessible pages (visible to everyone, read-only for guests) */}
+      <Route path="/"        element={<ProtectedRoute requireAuth={false}><Home /></ProtectedRoute>} />
+      <Route path="/calendar" element={<ProtectedRoute requireAuth={false}><WeeklyCalendar /></ProtectedRoute>} />
+
+      {/* Auth-required pages */}
+      <Route path="/card"          element={<ProtectedRoute><MyCard /></ProtectedRoute>} />
       <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-      <Route path="/shifts" element={<ProtectedRoute requireRole="supervisor"><MyShifts /></ProtectedRoute>} />
+
+      {/* Supervisor + Admin */}
+      <Route path="/shifts"      element={<ProtectedRoute requireRole="supervisor"><MyShifts /></ProtectedRoute>} />
       <Route path="/spontaneous" element={<ProtectedRoute requireRole="supervisor"><SpontaneousOpen /></ProtectedRoute>} />
-      <Route path="/admin/users" element={<ProtectedRoute requireRole="admin"><UserManagement /></ProtectedRoute>} />
-      <Route path="/admin/shiftplan" element={<ProtectedRoute requireRole="admin"><ShiftplanEditor /></ProtectedRoute>} />
+
+      {/* Admin only */}
+      <Route path="/admin/users"      element={<ProtectedRoute requireRole="admin"><UserManagement /></ProtectedRoute>} />
+      <Route path="/admin/shiftplan"  element={<ProtectedRoute requireRole="admin"><ShiftplanEditor /></ProtectedRoute>} />
       <Route path="/admin/attendance" element={<ProtectedRoute requireRole="admin"><AttendanceLogs /></ProtectedRoute>} />
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -45,6 +77,8 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
+      {/* GDPR consent banner — mounted before all providers so it fires on first paint */}
+      <GdprConsent />
       <ThemeProvider>
         <AuthProvider>
           <AppProvider>

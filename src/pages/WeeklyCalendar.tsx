@@ -1,22 +1,21 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { exportShiftsICS, exportSpontaneousICS, googleCalendarLink } from '../utils/calendarExport';
 
 const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-const HOUR_START = 6;   // 06:00
-const HOUR_END   = 22;  // 22:00
+const HOUR_START = 6;
+const HOUR_END   = 22;
 const HOURS      = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i);
-const HOUR_PX    = 56;  // height of one hour row in px
 
-function timeToY(time: string, base = HOUR_START): number {
+function timeToY(time: string, hourPx: number, base = HOUR_START): number {
   const [h, m] = time.split(':').map(Number);
-  return ((h - base) + m / 60) * HOUR_PX;
+  return ((h - base) + m / 60) * hourPx;
 }
-function timeToPx(start: string, end: string): number {
+function timeToPx(start: string, end: string, hourPx: number): number {
   const [hs, ms] = start.split(':').map(Number);
   const [he, me] = end.split(':').map(Number);
-  return ((he - hs) + (me - ms) / 60) * HOUR_PX;
+  return ((he - hs) + (me - ms) / 60) * hourPx;
 }
 
 /** Returns the Monday of the ISO week containing `date` */
@@ -46,30 +45,33 @@ function fmtWeekRange(monday: Date): string {
 
 export default function WeeklyCalendar() {
   const { state } = useApp();
-  const [offset, setOffset] = useState(0); // weeks offset from current
+  const [offset, setOffset] = useState(0);
   const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
   const nowLineRef = useRef<HTMLDivElement>(null);
   const bodyRef    = useRef<HTMLDivElement>(null);
+
+  // Responsive hour height: smaller on mobile so entire day fits without scrolling
+  const hourPx = useMemo(() => window.innerWidth < 768 ? 28 : 56, []);
 
   const today    = new Date();
   const baseMonday = weekStart(today);
   const monday   = addDays(baseMonday, offset * 7);
   const isCurrentWeek = offset === 0;
 
-  // Scroll to current time on mount
+  // Scroll to current time on mount (desktop only — mobile shows full day)
   useEffect(() => {
-    if (!isCurrentWeek || !bodyRef.current) return;
+    if (!isCurrentWeek || !bodyRef.current || hourPx < 56) return;
     const now = new Date();
-    const y = timeToY(`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`);
+    const y = timeToY(`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`, hourPx);
     bodyRef.current.scrollTop = Math.max(0, y - 80);
-  }, [isCurrentWeek]);
+  }, [isCurrentWeek, hourPx]);
 
   const todayStr = fmtDate(today);
 
   // Current time position
   const nowH = today.getHours();
   const nowM = today.getMinutes();
-  const nowY = ((nowH - HOUR_START) + nowM / 60) * HOUR_PX;
+  const nowY = ((nowH - HOUR_START) + nowM / 60) * hourPx;
   const nowVisible = isCurrentWeek && nowH >= HOUR_START && nowH < HOUR_END;
 
   return (
@@ -121,8 +123,8 @@ export default function WeeklyCalendar() {
           })}
         </div>
 
-        {/* Body */}
-        <div className="cal-body" ref={bodyRef}>
+        {/* Body — CSS variable drives row heights; JS uses hourPx for absolute positions */}
+        <div className="cal-body" ref={bodyRef} style={{ '--hour-px': `${hourPx}px` } as React.CSSProperties}>
           {/* Time column */}
           <div className="cal-time-col">
             {HOURS.map(h => (
@@ -196,8 +198,8 @@ export default function WeeklyCalendar() {
 
                 {/* Events */}
                 {allEvents.map(ev => {
-                  const top    = timeToY(ev.start);
-                  const height = Math.max(timeToPx(ev.start, ev.end), 18);
+                  const top    = timeToY(ev.start, hourPx);
+                  const height = Math.max(timeToPx(ev.start, ev.end, hourPx), 18);
                   const cls = ev.type === 'shift' ? 'cal-event-shift'
                              : ev.type === 'open'  ? 'cal-event-open'
                              : 'cal-event-free';

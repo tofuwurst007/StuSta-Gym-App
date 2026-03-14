@@ -12,6 +12,7 @@ export interface User {
   membershipEnd: string;     // YYYY-MM-DD
   createdAt: string;
   avatarInitials?: string;
+  avatarId?: string;
 }
 
 export interface ShiftBlock {
