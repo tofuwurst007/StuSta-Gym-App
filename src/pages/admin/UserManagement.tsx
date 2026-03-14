@@ -1,150 +1,152 @@
 import { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { AvatarDisplay } from '../../components/AvatarPicker';
 import type { User, Role } from '../../types';
+
+const ROLE_ORDER: Role[] = ['member', 'supervisor', 'admin'];
+const ROLE_LABELS: Record<Role, string> = { member: 'Member', supervisor: 'Supervisor', admin: 'Admin' };
 
 export default function UserManagement() {
   const { state, dispatch } = useApp();
   const { currentUser } = useAuth();
-  const [editing, setEditing] = useState<User | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [newUser, setNewUser] = useState<Partial<User>>({ role: 'member' });
+  const [search, setSearch]           = useState('');
+  const [filterRole, setFilterRole]   = useState<Role | 'all'>('all');
+  const [confirmDelete, setConfirmDelete] = useState<User | null>(null);
 
-  const saveEdit = () => {
-    if (!editing) return;
-    dispatch({ type: 'UPDATE_USER', payload: editing });
-    setEditing(null);
-  };
-
-  const deleteUser = (id: string) => {
-    if (id === currentUser?.id) return; // can't delete self
-    dispatch({ type: 'DELETE_USER', payload: id });
-  };
+  const filtered = state.users.filter(u => {
+    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) ||
+                        u.email.toLowerCase().includes(search.toLowerCase());
+    const matchRole = filterRole === 'all' || u.role === filterRole;
+    return matchSearch && matchRole;
+  });
 
   const promote = (user: User) => {
-    const nextRole: Record<Role, Role> = { member: 'supervisor', supervisor: 'admin', admin: 'admin' };
-    dispatch({ type: 'UPDATE_USER', payload: { ...user, role: nextRole[user.role] } });
+    const idx = ROLE_ORDER.indexOf(user.role);
+    if (idx >= ROLE_ORDER.length - 1) return;
+    dispatch({ type: 'UPDATE_USER', payload: { ...user, role: ROLE_ORDER[idx + 1] } });
   };
 
   const demote = (user: User) => {
-    const prevRole: Record<Role, Role> = { member: 'member', supervisor: 'member', admin: 'supervisor' };
-    dispatch({ type: 'UPDATE_USER', payload: { ...user, role: prevRole[user.role] } });
+    const idx = ROLE_ORDER.indexOf(user.role);
+    if (idx <= 0) return;
+    dispatch({ type: 'UPDATE_USER', payload: { ...user, role: ROLE_ORDER[idx - 1] } });
   };
 
-  const addUser = () => {
-    if (!newUser.name || !newUser.email) return;
-    const u: User = {
-      id: `u-${Date.now()}`,
-      name: newUser.name!,
-      email: newUser.email!,
-      role: newUser.role as Role ?? 'member',
-      house: newUser.house ?? '',
-      room: newUser.room ?? '',
-      dateOfBirth: newUser.dateOfBirth ?? '',
-      membershipStart: newUser.membershipStart ?? new Date().toISOString().split('T')[0],
-      membershipEnd: newUser.membershipEnd ?? '',
-      createdAt: new Date().toISOString(),
-      avatarInitials: newUser.name!.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2),
-    };
-    dispatch({ type: 'ADD_USER', payload: u });
-    setAdding(false);
-    setNewUser({ role: 'member' });
+  const deleteUser = (user: User) => {
+    dispatch({ type: 'DELETE_USER', payload: user.id });
+    setConfirmDelete(null);
+  };
+
+  const counts = {
+    all:        state.users.length,
+    member:     state.users.filter(u => u.role === 'member').length,
+    supervisor: state.users.filter(u => u.role === 'supervisor').length,
+    admin:      state.users.filter(u => u.role === 'admin').length,
   };
 
   return (
     <div className="page">
       <div className="page-header">
-        <h2>User Management</h2>
-        <button className="btn-primary-sm" onClick={() => setAdding(true)}>+ Add User</button>
+        <div>
+          <h2>User Management</h2>
+          <p className="page-subtitle">{state.users.length} registered members</p>
+        </div>
       </div>
 
-      {/* Add user modal */}
-      {adding && (
-        <div className="modal-overlay" onClick={() => setAdding(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-title">Add New User</h3>
-            {(['name', 'email', 'house', 'room', 'dateOfBirth', 'membershipStart', 'membershipEnd'] as const).map(field => (
-              <div key={field} className="form-row">
-                <label className="form-label">{field}</label>
-                <input
-                  type={field.includes('date') || field.includes('Date') || field.includes('Start') || field.includes('End') ? 'date' : 'text'}
-                  className="form-input"
-                  value={(newUser as Record<string, string>)[field] ?? ''}
-                  onChange={e => setNewUser(u => ({ ...u, [field]: e.target.value }))}
-                />
-              </div>
-            ))}
-            <div className="form-row">
-              <label className="form-label">Role</label>
-              <select className="form-input" value={newUser.role} onChange={e => setNewUser(u => ({ ...u, role: e.target.value as Role }))}>
-                <option value="member">member</option>
-                <option value="supervisor">supervisor</option>
-                <option value="admin">admin</option>
-              </select>
-            </div>
-            <div className="modal-actions">
-              <button className="btn-ghost" onClick={() => setAdding(false)}>Cancel</button>
-              <button className="btn-primary" onClick={addUser}>Add</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit user modal */}
-      {editing && (
-        <div className="modal-overlay" onClick={() => setEditing(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-title">Edit User</h3>
-            {(['name', 'email', 'house', 'room', 'dateOfBirth', 'membershipStart', 'membershipEnd'] as const).map(field => (
-              <div key={field} className="form-row">
-                <label className="form-label">{field}</label>
-                <input
-                  type={field.includes('date') || field.includes('Date') || field.includes('Start') || field.includes('End') ? 'date' : 'text'}
-                  className="form-input"
-                  value={(editing as unknown as Record<string, string>)[field] ?? ''}
-                  onChange={e => setEditing(u => u ? { ...u, [field]: e.target.value } : u)}
-                />
-              </div>
-            ))}
-            <div className="form-row">
-              <label className="form-label">Role</label>
-              <select className="form-input" value={editing.role} onChange={e => setEditing(u => u ? { ...u, role: e.target.value as Role } : u)}>
-                <option value="member">member</option>
-                <option value="supervisor">supervisor</option>
-                <option value="admin">admin</option>
-              </select>
-            </div>
-            <div className="modal-actions">
-              <button className="btn-ghost" onClick={() => setEditing(null)}>Cancel</button>
-              <button className="btn-primary" onClick={saveEdit}>Save</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="user-list">
-        {state.users.map(user => (
-          <div key={user.id} className="user-row">
-            <div className="user-avatar-sm">{user.avatarInitials}</div>
-            <div className="user-info">
-              <span className="user-name">{user.name}</span>
-              <span className="user-email">{user.email}</span>
-              <span className="user-detail">House {user.house} · Room {user.room}</span>
-            </div>
-            <span className={`role-badge role-${user.role}`}>{user.role}</span>
-            <div className="user-actions">
-              <button className="btn-ghost-sm" onClick={() => setEditing(user)}>Edit</button>
-              <button className="btn-ghost-sm" onClick={() => promote(user)} disabled={user.role === 'admin'}>↑</button>
-              <button className="btn-ghost-sm" onClick={() => demote(user)} disabled={user.role === 'member'}>↓</button>
-              <button
-                className="btn-danger-sm"
-                onClick={() => deleteUser(user.id)}
-                disabled={user.id === currentUser?.id}
-              >Delete</button>
-            </div>
-          </div>
+      {/* Role filter chips */}
+      <div className="admin-stats-row">
+        {(['all', 'member', 'supervisor', 'admin'] as const).map(r => (
+          <button
+            key={r}
+            className={`admin-stat-chip ${filterRole === r ? 'active' : ''}`}
+            onClick={() => setFilterRole(r)}
+          >
+            <span className="stat-count">{counts[r]}</span>
+            <span className="stat-label">{r === 'all' ? 'All' : ROLE_LABELS[r as Role] + 's'}</span>
+          </button>
         ))}
       </div>
+
+      {/* Search bar */}
+      <div className="admin-search-row">
+        <div className="search-input-wrap">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            className="admin-search-input"
+            placeholder="Search by name or email…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          {search && <button className="search-clear" onClick={() => setSearch('')}>✕</button>}
+        </div>
+      </div>
+
+      {/* User cards */}
+      <div className="admin-user-list">
+        {filtered.length === 0 && <div className="empty-state">No users found</div>}
+        {filtered.map(user => {
+          const isSelf   = user.id === currentUser?.id;
+          const roleIdx  = ROLE_ORDER.indexOf(user.role);
+
+          return (
+            <div key={user.id} className="admin-user-card">
+              <div className="admin-user-avatar">
+                <AvatarDisplay avatarId={user.avatarId} initials={user.avatarInitials} size={44} />
+              </div>
+
+              <div className="admin-user-info">
+                <div className="admin-user-name">
+                  {user.name}
+                  {isSelf && <span className="self-badge">you</span>}
+                </div>
+                <div className="admin-user-email">{user.email}</div>
+              </div>
+
+              <span className={`role-badge role-${user.role}`}>{ROLE_LABELS[user.role]}</span>
+
+              <div className="admin-user-actions">
+                <button
+                  className="admin-action-btn promote"
+                  disabled={isSelf || roleIdx >= ROLE_ORDER.length - 1}
+                  onClick={() => promote(user)}
+                  title={`Promote to ${ROLE_ORDER[roleIdx + 1] ?? ''}`}
+                >↑ Promote</button>
+                <button
+                  className="admin-action-btn demote"
+                  disabled={isSelf || roleIdx <= 0}
+                  onClick={() => demote(user)}
+                  title={`Demote to ${ROLE_ORDER[roleIdx - 1] ?? ''}`}
+                >↓ Demote</button>
+                <button
+                  className="admin-action-btn delete"
+                  disabled={isSelf}
+                  onClick={() => setConfirmDelete(user)}
+                >🗑</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Delete confirm modal */}
+      {confirmDelete && (
+        <div className="modal-overlay" onClick={() => setConfirmDelete(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title">Delete user?</h3>
+            <p style={{ color: 'var(--text2)', fontSize: 14, margin: '8px 0 20px' }}>
+              Permanently delete <strong>{confirmDelete.name}</strong> ({confirmDelete.email})?
+              This cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button className="btn-ghost" onClick={() => setConfirmDelete(null)}>Cancel</button>
+              <button className="btn-danger" onClick={() => deleteUser(confirmDelete)}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

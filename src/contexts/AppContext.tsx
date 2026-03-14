@@ -175,6 +175,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         switch (action.type) {
+          case 'UPDATE_USER':
+            await supabase.from('profiles').update({
+              name: action.payload.name,
+              role: action.payload.role,
+              avatar_id: action.payload.avatarId ?? null,
+              avatar_initials: action.payload.avatarInitials ?? null,
+            }).eq('id', action.payload.id);
+            break;
+          case 'DELETE_USER':
+            // Fallback: remove from profiles (auth user stays but can't load profile)
+            await supabase.from('profiles').delete().eq('id', action.payload);
+            break;
           case 'ADD_SHIFT':
             await supabase.from('shift_blocks').insert({
               title: 'New Class', trainer: '', day_of_week: action.payload.dayOfWeek,

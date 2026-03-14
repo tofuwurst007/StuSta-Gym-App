@@ -64,10 +64,8 @@ create policy "Shift blocks viewable by everyone"
 
 create policy "Admins and trainers can manage shift blocks"
   on public.shift_blocks for all
-  using (exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role in ('admin', 'trainer')
-  ));
+  using (exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'trainer')))
+  with check (exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'trainer')));
 
 -- ─────────────────────────────────────────
 -- SPONTANEOUS OPENINGS
@@ -90,10 +88,8 @@ create policy "Spontaneous openings viewable by everyone"
 
 create policy "Admins and trainers can manage spontaneous openings"
   on public.spontaneous_openings for all
-  using (exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role in ('admin', 'trainer')
-  ));
+  using (exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'trainer')))
+  with check (exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'trainer')));
 
 -- ─────────────────────────────────────────
 -- NOTIFICATIONS
@@ -118,7 +114,7 @@ create policy "Users can update own notifications"
 
 create policy "Admins can insert notifications"
   on public.notifications for insert
-  using (exists (
+  with check (exists (
     select 1 from public.profiles
     where id = auth.uid() and role in ('admin', 'trainer')
   ));
@@ -142,7 +138,5 @@ create policy "Users can view own attendance"
 
 create policy "Admins can manage all attendance"
   on public.attendance_logs for all
-  using (exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role in ('admin', 'trainer')
-  ));
+  using (exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'trainer')))
+  with check (exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'trainer')));
