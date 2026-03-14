@@ -3,7 +3,7 @@ import type { User } from '../types';
 import { supabase } from '../lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 
-// Map a Supabase profile row + session to our User type
+// ── Map a Supabase profile row (or just session data) to our User type ────────
 function profileToUser(
   profile: Record<string, unknown>,
   session: Session
@@ -24,6 +24,27 @@ function profileToUser(
   };
 }
 
+/** Build a minimal User from the session alone (fallback when profiles table
+ *  is unreachable or has no row for this user). */
+function userFromSession(session: Session): User {
+  const meta = session.user.user_metadata ?? {};
+  const name = String(meta.name ?? session.user.email?.split('@')[0] ?? 'User');
+  return {
+    id:              session.user.id,
+    name,
+    email:           session.user.email ?? '',
+    role:            'member',
+    house:           '',
+    room:            '',
+    dateOfBirth:     '',
+    membershipStart: '',
+    membershipEnd:   '',
+    createdAt:       session.user.created_at ?? '',
+    avatarInitials:  name.charAt(0).toUpperCase(),
+    avatarId:        undefined,
+  };
+}
+
 interface AuthContextType {
   currentUser:       User | null;   // null = guest
   loading:           boolean;       // true only during active login / sign-up
@@ -38,30 +59,22 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  // loading = true ONLY during an active login/signup call (disables form inputs)
   const [loading, setLoading]         = useState(false);
-  // ready = true once the initial getSession() check is complete
   const [ready, setReady]             = useState(false);
 
   // ── Load session on mount + subscribe to future auth changes ────────────────
   useEffect(() => {
-    // Check for an existing session silently — does NOT disable inputs
     supabase.auth.getSession()
       .then(async ({ data: { session } }) => {
         if (session) await loadProfile(session);
       })
-      .catch(() => {})
+      .catch((err) => console.error('[Auth] getSession failed:', err))
       .finally(() => setReady(true));
 
-    // Keep currentUser in sync whenever Supabase fires an auth event
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (_event, session) => {
         if (session) {
-          // Only run on events other than SIGNED_IN — login() already calls
-          // loadProfile() directly, so we avoid a redundant double-fetch.
-          if (event !== 'SIGNED_IN') {
-            await loadProfile(session);
-          }
+          await loadProfile(session);
         } else {
           setCurrentUser(null);
         }
@@ -72,18 +85,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── Fetch (or create) the profile row and set currentUser ───────────────────
   async function loadProfile(session: Session) {
-    let { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .single();
+    try {
+      // 1) Try to read the existing profile
+      const { data: profile, error: selErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
 
-    // Trigger may not have fired yet — create the row ourselves as a fallback
-    if (!profile) {
+      if (selErr) {
+        console.warn('[Auth] profile SELECT failed:', selErr.message);
+      }
+
+      if (profile) {
+        setCurrentUser(profileToUser(profile as Record<string, unknown>, session));
+        return;   // ← happy path, we're done
+      }
+
+      // 2) No profile row — create one (trigger may not have fired yet)
       const name = session.user.user_metadata?.name
         ?? session.user.email?.split('@')[0]
         ?? 'User';
-      const { data: created } = await supabase
+
+      const { data: created, error: upsErr } = await supabase
         .from('profiles')
         .upsert({
           id:               session.user.id,
@@ -94,17 +118,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
         .select()
         .single();
-      profile = created;
-    }
 
-    if (profile) {
-      setCurrentUser(profileToUser(profile as Record<string, unknown>, session));
+      if (upsErr) {
+        console.warn('[Auth] profile UPSERT failed:', upsErr.message);
+      }
+
+      if (created) {
+        setCurrentUser(profileToUser(created as Record<string, unknown>, session));
+        return;
+      }
+
+      // 3) Everything failed — still sign the user in with session-only data
+      //    so they don't get stuck as "guest" forever
+      console.warn('[Auth] falling back to session-only user');
+      setCurrentUser(userFromSession(session));
+
+    } catch (err) {
+      console.error('[Auth] loadProfile crashed:', err);
+      // Even on crash, treat as signed-in with minimal data
+      setCurrentUser(userFromSession(session));
     }
   }
 
   // ── Email + password sign-in ─────────────────────────────────────────────────
-  // Calls loadProfile() directly so currentUser is set BEFORE this promise
-  // resolves — the Login page can safely navigate() straight after awaiting this.
   async function login(email: string, password: string): Promise<void> {
     setLoading(true);
     try {
@@ -120,12 +156,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function signUp(email: string, password: string, name: string): Promise<void> {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: { data: { name } },
       });
       if (error) throw new Error(error.message);
+
+      // Supabase returns a fake success for existing emails (to prevent
+      // email enumeration).  Detect it by checking the identities array.
+      if (data.user && (data.user.identities?.length ?? 0) === 0) {
+        throw new Error('An account with this email already exists. Please sign in instead.');
+      }
     } finally {
       setLoading(false);
     }

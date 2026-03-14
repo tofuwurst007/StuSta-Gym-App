@@ -199,16 +199,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <span className="theme-toggle-label">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
       </button>
 
-      {/* Cookie settings */}
-      <button
-        className="theme-toggle-row"
-        onClick={() => import('klaro').then(K => (K as { show?: () => void }).show?.())}
-        aria-label="Cookie settings"
-      >
-        <span className="nav-icon nav-icon-sm">{Icon.cookie}</span>
-        <span className="theme-toggle-label">Cookie settings</span>
-      </button>
-
       {/* User card / guest CTA */}
       {isGuest ? (
         <div className="sidebar-guest-card">

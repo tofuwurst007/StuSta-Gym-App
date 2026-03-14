@@ -151,15 +151,10 @@ export default function PrivacyPolicy() {
             Einwilligung gemäß Art. 6 Abs. 1 lit. a DSGVO.
             Werbe-Tracking findet nicht statt.
           </p>
-          <button
-            className="btn btn-secondary"
-            style={{ marginTop: 12 }}
-            onClick={() => {
-              import('klaro').then(Klaro => (Klaro as { show?: () => void }).show?.());
-            }}
-          >
-            Cookie-Einstellungen verwalten
-          </button>
+          <p style={{ marginTop: 8, fontSize: 13, color: 'var(--text2)' }}>
+            <em>Cookie preferences are requested once on your first visit. To reset,
+            clear your browser's localStorage for this site.</em>
+          </p>
         </section>
 
         {/* ─── 9. Datensicherheit ─── */}
