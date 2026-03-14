@@ -2,3 +2,21 @@ node_modules/
 dist/
 .claude/
 *.local
+
+# Android build outputs
+android/app/build/
+android/.gradle/
+android/build/
+
+# Release signing keys (never commit!)
+*.jks
+*.keystore
+
+# Build scripts / logs (local tooling)
+build_android.bat
+build_android.log
+build_android.ps1
+gen_keystore.ps1
+
+# PocketBase binary (too large for git)
+backend/pocketbase.exe
