@@ -42,10 +42,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Load current session on mount + subscribe to auth changes
   useEffect(() => {
     // Initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) await loadProfile(session);
-      setLoading(false);
-    });
+    supabase.auth.getSession()
+      .then(async ({ data: { session } }) => {
+        if (session) await loadProfile(session);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
 
     // Listen for sign-in / sign-out events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
