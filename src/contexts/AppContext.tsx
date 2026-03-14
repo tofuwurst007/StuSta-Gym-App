@@ -2,19 +2,18 @@
  * AppContext — wraps all gym data (shifts, users, notifications, attendance, spontaneous openings).
  *
  * Strategy:
- *  - On mount: fetch all collections from PocketBase in parallel, hydrate local state.
+ *  - On mount: fetch all collections from Supabase in parallel, hydrate local state.
  *  - dispatch() applies optimistic updates to local state immediately for snappy UX,
- *    then fires the corresponding PocketBase API call in the background.
+ *    then fires the corresponding Supabase API call in the background.
  *  - Realtime subscriptions keep state fresh when other users make changes.
- *  - Falls back gracefully to INITIAL_STATE (mock data) if PocketBase is unreachable,
- *    so the app still works during development without a running backend.
+ *  - Falls back gracefully to INITIAL_STATE (mock data) if Supabase is unreachable.
  */
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import type { AppState, ShiftBlock, SpontaneousOpening, User, Notification, AttendanceLog } from '../types';
 import { INITIAL_STATE } from '../data/mockData';
-import { pb } from '../lib/pocketbase';
+import { supabase } from '../lib/supabase';
 
-// ─── Action types (identical to old interface — no page changes needed) ────────
+// ─── Action types ─────────────────────────────────────────────────────────────
 
 type Action =
   | { type: 'SET_STATE'; payload: AppState }
@@ -33,7 +32,7 @@ type Action =
   | { type: 'ADD_ATTENDANCE'; payload: AttendanceLog }
   | { type: 'CHECKOUT_ATTENDANCE'; payload: { id: string; checkOut: string } };
 
-// ─── Pure reducer (optimistic / local state) ─────────────────────────────────
+// ─── Pure reducer ─────────────────────────────────────────────────────────────
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -51,10 +50,10 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, shiftBlocks: state.shiftBlocks.map(s =>
         s.id === action.payload ? { ...s, supervisorId: undefined, supervisorName: undefined } : s
       )};
-    case 'UPDATE_SHIFT':    return { ...state, shiftBlocks: state.shiftBlocks.map(s => s.id === action.payload.id ? action.payload : s) };
-    case 'ADD_SHIFT':       return { ...state, shiftBlocks: [...state.shiftBlocks, action.payload] };
-    case 'DELETE_SHIFT':    return { ...state, shiftBlocks: state.shiftBlocks.filter(s => s.id !== action.payload) };
-    case 'ADD_SPONTANEOUS': return { ...state, spontaneousOpenings: [...state.spontaneousOpenings, action.payload] };
+    case 'UPDATE_SHIFT':       return { ...state, shiftBlocks: state.shiftBlocks.map(s => s.id === action.payload.id ? action.payload : s) };
+    case 'ADD_SHIFT':          return { ...state, shiftBlocks: [...state.shiftBlocks, action.payload] };
+    case 'DELETE_SHIFT':       return { ...state, shiftBlocks: state.shiftBlocks.filter(s => s.id !== action.payload) };
+    case 'ADD_SPONTANEOUS':    return { ...state, spontaneousOpenings: [...state.spontaneousOpenings, action.payload] };
     case 'DELETE_SPONTANEOUS': return { ...state, spontaneousOpenings: state.spontaneousOpenings.filter(s => s.id !== action.payload) };
     case 'ADD_NOTIFICATION':   return { ...state, notifications: [action.payload, ...state.notifications] };
     case 'MARK_NOTIFICATION_READ':
@@ -69,36 +68,45 @@ function reducer(state: AppState, action: Action): AppState {
   }
 }
 
-// ─── Record mappers (PocketBase → TypeScript types) ──────────────────────────
+// ─── Row mappers (Supabase → TypeScript types) ────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toUser(r: any): User {
-  return { id: r.id, name: r.name ?? '', email: r.email ?? '', role: r.role ?? 'member',
-    house: r.house ?? '', room: r.room ?? '', dateOfBirth: r.dateOfBirth ?? '',
-    membershipStart: r.membershipStart ?? '', membershipEnd: r.membershipEnd ?? '',
-    createdAt: r.created ?? r.createdAt ?? '', avatarInitials: r.avatarInitials,
-    avatarId: r.avatarId ?? undefined };
+  return {
+    id: r.id, name: r.name ?? '', email: r.email ?? '', role: r.role ?? 'member',
+    house: '', room: '', dateOfBirth: '', membershipStart: '', membershipEnd: '',
+    createdAt: r.created_at ?? '', avatarInitials: r.avatar_initials ?? '',
+    avatarId: r.avatar_id ?? undefined,
+  };
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toShift(r: any): ShiftBlock {
-  return { id: r.id, dayOfWeek: r.dayOfWeek, startTime: r.startTime, endTime: r.endTime,
-    supervisorId: r.supervisorId || undefined, supervisorName: r.supervisorName || undefined };
+  return {
+    id: r.id, dayOfWeek: r.day_of_week, startTime: r.start_time, endTime: r.end_time,
+    supervisorId: r.supervisor_id || undefined, supervisorName: r.supervisor_name || undefined,
+  };
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toSpont(r: any): SpontaneousOpening {
-  return { id: r.id, supervisorId: r.supervisorId, supervisorName: r.supervisorName,
-    date: r.date, startTime: r.startTime, endTime: r.endTime, note: r.note || undefined };
+  return {
+    id: r.id, supervisorId: r.supervisor_id, supervisorName: r.supervisor_name,
+    date: r.date, startTime: r.start_time, endTime: r.end_time, note: r.note || undefined,
+  };
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toNotif(r: any): Notification {
-  return { id: r.id, userId: r.targetUserId ?? r.userId ?? 'all', message: r.message,
-    type: r.type ?? 'info', read: !!r.read, createdAt: r.created ?? r.createdAt ?? '' };
+  return {
+    id: r.id, userId: r.user_id ?? 'all', message: r.message,
+    type: r.type ?? 'info', read: !!r.read, createdAt: r.created_at ?? '',
+  };
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toAttendance(r: any): AttendanceLog {
-  return { id: r.id, userId: r.userId ?? r.expand?.user?.id ?? '',
-    userName: r.userName ?? r.expand?.user?.name ?? '',
-    checkIn: r.checkIn ?? r.created ?? '', checkOut: r.checkOut || undefined };
+  return {
+    id: r.id, userId: r.user_id ?? '',
+    userName: r.user_name ?? '',
+    checkIn: r.check_in ?? r.created_at ?? '', checkOut: r.check_out || undefined,
+  };
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -106,7 +114,6 @@ function toAttendance(r: any): AttendanceLog {
 interface AppContextType {
   state: AppState;
   dispatch: React.Dispatch<Action>;
-  /** Re-fetch all collections from PocketBase (call after login/logout) */
   refetch: () => Promise<void>;
 }
 
@@ -118,119 +125,126 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // ── Initial fetch ──────────────────────────────────────────────────────────
   const refetch = useCallback(async () => {
     try {
-      const [users, shifts, sponts, notifs, logs] = await Promise.all([
-        pb.collection('users').getFullList({ sort: 'name' }),
-        pb.collection('shift_blocks').getFullList({ sort: 'dayOfWeek,startTime' }),
-        pb.collection('spontaneous_openings').getFullList({ sort: '-date' }),
-        pb.collection('notifications').getFullList({ sort: '-created' }),
-        pb.collection('attendance_logs').getFullList({ sort: '-checkIn' }),
+      const [
+        { data: users },
+        { data: shifts },
+        { data: sponts },
+        { data: notifs },
+        { data: logs },
+      ] = await Promise.all([
+        supabase.from('profiles').select('*').order('name'),
+        supabase.from('shift_blocks').select('*').order('day_of_week').order('start_time'),
+        supabase.from('spontaneous_openings').select('*').order('date', { ascending: false }),
+        supabase.from('notifications').select('*').order('created_at', { ascending: false }),
+        supabase.from('attendance_logs').select('*').order('created_at', { ascending: false }),
       ]);
-      dispatch({ type: 'SET_STATE', payload: {
-        users:               users.map(toUser),
-        shiftBlocks:         shifts.map(toShift),
-        spontaneousOpenings: sponts.map(toSpont),
-        notifications:       notifs.map(toNotif),
-        attendanceLogs:      logs.map(toAttendance),
-      }});
+
+      dispatch({
+        type: 'SET_STATE',
+        payload: {
+          users:               (users  ?? []).map(toUser),
+          shiftBlocks:         (shifts ?? []).map(toShift),
+          spontaneousOpenings: (sponts ?? []).map(toSpont),
+          notifications:       (notifs ?? []).map(toNotif),
+          attendanceLogs:      (logs   ?? []).map(toAttendance),
+        },
+      });
     } catch {
-      // PocketBase not running — keep INITIAL_STATE (dev fallback)
-      console.warn('[AppContext] PocketBase unreachable — using mock data');
+      console.warn('[AppContext] Supabase unreachable — using mock data');
     }
   }, []);
 
   useEffect(() => { refetch(); }, [refetch]);
 
-  // ── Realtime subscriptions (live updates for all users) ────────────────────
+  // ── Realtime subscriptions ─────────────────────────────────────────────────
   useEffect(() => {
-    let unsubShifts: (() => void) | null = null;
-    let unsubSpont:  (() => void) | null = null;
+    const channel = supabase
+      .channel('app-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_blocks' }, () => refetch())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'spontaneous_openings' }, () => refetch())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => refetch())
+      .subscribe();
 
-    (async () => {
-      try {
-        unsubShifts = await pb.collection('shift_blocks').subscribe('*', () => refetch());
-        unsubSpont  = await pb.collection('spontaneous_openings').subscribe('*', () => refetch());
-      } catch {
-        // Silently ignore — realtime is a nice-to-have
-      }
-    })();
-
-    return () => {
-      unsubShifts?.();
-      unsubSpont?.();
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [refetch]);
 
-  // ── Dispatch wrapper — optimistic local update + PocketBase API call ────────
+  // ── Dispatch with Supabase sync ────────────────────────────────────────────
   const dispatchWithSync: React.Dispatch<Action> = useCallback((action: Action) => {
-    // 1. Apply optimistic update immediately
-    dispatch(action);
+    dispatch(action); // optimistic update
 
-    // 2. Fire API call in background (fire-and-forget; refetch on error)
     (async () => {
       try {
         switch (action.type) {
-          case 'ADD_USER':
-            await pb.collection('users').create({ ...action.payload, password: 'changeme123', passwordConfirm: 'changeme123' });
-            break;
-          case 'UPDATE_USER':
-            await pb.collection('users').update(action.payload.id, action.payload);
-            break;
-          case 'DELETE_USER':
-            await pb.collection('users').delete(action.payload);
-            break;
           case 'ADD_SHIFT':
-            await pb.collection('shift_blocks').create(action.payload);
+            await supabase.from('shift_blocks').insert({
+              title: 'New Class', trainer: '', day_of_week: action.payload.dayOfWeek,
+              start_time: action.payload.startTime, end_time: action.payload.endTime,
+              capacity: 10, enrolled: 0, color: '#6C63FF',
+            });
             break;
           case 'UPDATE_SHIFT':
-            await pb.collection('shift_blocks').update(action.payload.id, action.payload);
+            await supabase.from('shift_blocks').update({
+              day_of_week: action.payload.dayOfWeek,
+              start_time: action.payload.startTime,
+              end_time: action.payload.endTime,
+            }).eq('id', action.payload.id);
             break;
           case 'DELETE_SHIFT':
-            await pb.collection('shift_blocks').delete(action.payload);
+            await supabase.from('shift_blocks').delete().eq('id', action.payload);
             break;
           case 'CLAIM_SHIFT':
-            await pb.collection('shift_blocks').update(action.payload.shiftId, {
-              supervisorId: action.payload.supervisorId,
-              supervisorName: action.payload.supervisorName,
-            });
+            await supabase.from('shift_blocks').update({
+              supervisor_id: action.payload.supervisorId,
+              supervisor_name: action.payload.supervisorName,
+            }).eq('id', action.payload.shiftId);
             break;
           case 'UNCLAIM_SHIFT':
-            await pb.collection('shift_blocks').update(action.payload, {
-              supervisorId: null, supervisorName: null,
-            });
+            await supabase.from('shift_blocks').update({
+              supervisor_id: null, supervisor_name: null,
+            }).eq('id', action.payload);
             break;
           case 'ADD_SPONTANEOUS':
-            await pb.collection('spontaneous_openings').create(action.payload);
+            await supabase.from('spontaneous_openings').insert({
+              title: action.payload.note ?? 'Extra Session',
+              trainer: action.payload.supervisorName ?? '',
+              date: action.payload.date,
+              start_time: action.payload.startTime,
+              end_time: action.payload.endTime,
+              capacity: 10, enrolled: 0,
+            });
             break;
           case 'DELETE_SPONTANEOUS':
-            await pb.collection('spontaneous_openings').delete(action.payload);
+            await supabase.from('spontaneous_openings').delete().eq('id', action.payload);
             break;
           case 'ADD_NOTIFICATION':
-            await pb.collection('notifications').create({
-              ...action.payload,
-              targetUserId: action.payload.userId,
+            await supabase.from('notifications').insert({
+              user_id: action.payload.userId === 'all' ? null : action.payload.userId,
+              title: action.payload.type ?? 'Info',
+              message: action.payload.message,
+              read: false,
             });
             break;
           case 'MARK_NOTIFICATION_READ':
             if (action.payload === 'all') {
-              // Mark all — re-fetch to get current IDs, then batch update
-              const all = await pb.collection('notifications').getFullList({ filter: 'read=false' });
-              await Promise.all(all.map(n => pb.collection('notifications').update(n.id, { read: true })));
+              await supabase.from('notifications').update({ read: true }).eq('read', false);
             } else {
-              await pb.collection('notifications').update(action.payload, { read: true });
+              await supabase.from('notifications').update({ read: true }).eq('id', action.payload);
             }
             break;
           case 'ADD_ATTENDANCE':
-            await pb.collection('attendance_logs').create(action.payload);
-            break;
-          case 'CHECKOUT_ATTENDANCE':
-            await pb.collection('attendance_logs').update(action.payload.id, { checkOut: action.payload.checkOut });
+            await supabase.from('attendance_logs').insert({
+              user_id: action.payload.userId,
+              shift_block_id: action.payload.id,
+              date: new Date().toISOString().split('T')[0],
+              status: 'present',
+            });
             break;
           default:
             break;
         }
       } catch (err) {
-        console.warn('[AppContext] PocketBase sync failed, re-fetching:', err);
-        await refetch(); // Roll back optimistic state on error
+        console.warn('[AppContext] Supabase sync failed, re-fetching:', err);
+        await refetch();
       }
     })();
   }, [refetch]);

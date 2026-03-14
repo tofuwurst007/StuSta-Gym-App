@@ -18,9 +18,7 @@ build_android.log
 build_android.ps1
 gen_keystore.ps1
 
-# PocketBase binary (too large for git)
+# PocketBase — entire backend folder (contains secrets + binary)
 backend/pocketbase.exe
-
-# PocketBase runtime data (SQLite WAL, temp files)
-backend/pb_data/*.db-shm
-backend/pb_data/*.db-wal
+backend/pocketbase.zip
+backend/pb_data/

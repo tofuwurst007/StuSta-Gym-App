@@ -13,9 +13,9 @@
     "@capacitor/browser": "^8.0.2",
     "@capacitor/cli": "^8.2.0",
     "@capacitor/core": "^8.2.0",
+    "@supabase/supabase-js": "^2.99.1",
     "@vercel/analytics": "^2.0.1",
     "klaro": "^0.7.21",
-    "pocketbase": "^0.26.8",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0"

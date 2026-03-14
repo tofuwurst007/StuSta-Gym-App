@@ -13,11 +13,12 @@ RUN wget -q "https://github.com/pocketbase/pocketbase/releases/download/v${PB_VE
 
 WORKDIR /pb
 
-# Data directory (mount as volume in production for persistence)
+# Copy migrations so PocketBase auto-runs them on first start
+COPY pb_migrations/ /pb/pb_migrations/
+
+# Data directory — mounted as persistent volume on fly.io
 VOLUME /pb/pb_data
 
 EXPOSE 8090
 
-# Start PocketBase — binds to 0.0.0.0 so Railway can reach it
-# Railway injects $PORT — default to 8090 for local Docker use
-CMD /pb/pocketbase serve --http=0.0.0.0:${PORT:-8090}
+CMD /pb/pocketbase serve --http=0.0.0.0:8090
