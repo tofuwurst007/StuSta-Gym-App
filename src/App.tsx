@@ -7,6 +7,7 @@ import GdprConsent from './components/GdprConsent';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import AuthCallback from './pages/AuthCallback';
 import Home from './pages/Home';
 import MyCard from './pages/MyCard';
 import Notifications from './pages/Notifications';
@@ -52,7 +53,7 @@ function AppRoutes() {
       <Route path="/login"   element={currentUser ? <Navigate to="/" replace /> : <Login />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
       {/* Auth callback — handles email verification redirect from Supabase */}
-      <Route path="/auth/callback" element={<Navigate to="/" replace />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
 
       {/* Guest-accessible pages (visible to everyone, read-only for guests) */}
       <Route path="/"        element={<ProtectedRoute requireAuth={false}><Home /></ProtectedRoute>} />
