@@ -102,14 +102,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;   // ← happy path, we're done
       }
 
-      // 2) No profile row — create one (trigger may not have fired yet)
+      // 2) No profile row — INSERT one (trigger may not have fired yet).
+      //    Use INSERT (not upsert!) so we never overwrite an existing row's role.
       const name = session.user.user_metadata?.name
         ?? session.user.email?.split('@')[0]
         ?? 'User';
 
-      const { data: created, error: upsErr } = await supabase
+      const { data: created, error: insErr } = await supabase
         .from('profiles')
-        .upsert({
+        .insert({
           id:               session.user.id,
           name,
           email:            session.user.email ?? '',
@@ -119,8 +120,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .select()
         .single();
 
-      if (upsErr) {
-        console.warn('[Auth] profile UPSERT failed:', upsErr.message);
+      if (insErr) {
+        console.warn('[Auth] profile INSERT failed:', insErr.message,
+          '(expected if row already exists — retrying SELECT)');
+        // Row likely exists but RLS blocked the first SELECT — retry
+        const { data: retry } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        if (retry) {
+          setCurrentUser(profileToUser(retry as Record<string, unknown>, session));
+          return;
+        }
       }
 
       if (created) {
