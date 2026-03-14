@@ -30,7 +30,10 @@ function ProtectedRoute({
   requireAuth?: boolean;
   requireRole?: 'supervisor' | 'admin';
 }) {
-  const { currentUser } = useAuth();
+  const { currentUser, ready } = useAuth();
+
+  // Wait for the initial session check before making auth decisions
+  if (!ready) return null;
 
   if (requireAuth && !currentUser)
     return <Navigate to={`/login?next=${encodeURIComponent(window.location.pathname)}`} replace />;
@@ -45,7 +48,20 @@ function ProtectedRoute({
 }
 
 function AppRoutes() {
-  const { currentUser } = useAuth();
+  const { currentUser, ready } = useAuth();
+
+  // Block rendering until the initial session check is done to avoid
+  // flashing the login page or "Sign in" button for returning users
+  if (!ready) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', background: 'var(--bg)',
+      }}>
+        <span style={{ fontSize: 32 }}>🏋️</span>
+      </div>
+    );
+  }
 
   return (
     <Routes>

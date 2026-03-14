@@ -26,7 +26,8 @@ function profileToUser(
 
 interface AuthContextType {
   currentUser:       User | null;   // null = guest
-  loading:           boolean;
+  loading:           boolean;       // true only during active login / sign-up
+  ready:             boolean;       // true once initial session check is done
   login:             (email: string, password: string) => Promise<void>;
   logout:            () => Promise<void>;
   signUp:            (email: string, password: string, name: string) => Promise<void>;
@@ -37,23 +38,30 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loading, setLoading]         = useState(true);
+  // loading = true ONLY during an active login/signup call (disables form inputs)
+  const [loading, setLoading]         = useState(false);
+  // ready = true once the initial getSession() check is complete
+  const [ready, setReady]             = useState(false);
 
-  // Load current session on mount + subscribe to auth changes
+  // ── Load session on mount + subscribe to future auth changes ────────────────
   useEffect(() => {
-    // Initial session
+    // Check for an existing session silently — does NOT disable inputs
     supabase.auth.getSession()
       .then(async ({ data: { session } }) => {
         if (session) await loadProfile(session);
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => setReady(true));
 
-    // Listen for sign-in / sign-out events
+    // Keep currentUser in sync whenever Supabase fires an auth event
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         if (session) {
-          await loadProfile(session);
+          // Only run on events other than SIGNED_IN — login() already calls
+          // loadProfile() directly, so we avoid a redundant double-fetch.
+          if (event !== 'SIGNED_IN') {
+            await loadProfile(session);
+          }
         } else {
           setCurrentUser(null);
         }
@@ -62,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  // ── Fetch (or create) the profile row and set currentUser ───────────────────
   async function loadProfile(session: Session) {
     let { data: profile } = await supabase
       .from('profiles')
@@ -69,18 +78,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq('id', session.user.id)
       .single();
 
-    // If the trigger didn't create a profile yet, create one now
+    // Trigger may not have fired yet — create the row ourselves as a fallback
     if (!profile) {
       const name = session.user.user_metadata?.name
         ?? session.user.email?.split('@')[0]
         ?? 'User';
-      const { data: created } = await supabase.from('profiles').upsert({
-        id: session.user.id,
-        name,
-        email: session.user.email ?? '',
-        role: 'member',
-        avatar_initials: name.charAt(0).toUpperCase(),
-      }).select().single();
+      const { data: created } = await supabase
+        .from('profiles')
+        .upsert({
+          id:               session.user.id,
+          name,
+          email:            session.user.email ?? '',
+          role:             'member',
+          avatar_initials:  name.charAt(0).toUpperCase(),
+        })
+        .select()
+        .single();
       profile = created;
     }
 
@@ -89,18 +102,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  /** Email + password sign-in */
+  // ── Email + password sign-in ─────────────────────────────────────────────────
+  // Calls loadProfile() directly so currentUser is set BEFORE this promise
+  // resolves — the Login page can safely navigate() straight after awaiting this.
   async function login(email: string, password: string): Promise<void> {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw new Error(error.message);
+      if (data.session) await loadProfile(data.session);
     } finally {
       setLoading(false);
     }
   }
 
-  /** Email + password sign-up */
+  // ── Email + password sign-up ─────────────────────────────────────────────────
   async function signUp(email: string, password: string, name: string): Promise<void> {
     setLoading(true);
     try {
@@ -115,20 +131,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  /** Sign out */
+  // ── Sign out ─────────────────────────────────────────────────────────────────
   async function logout(): Promise<void> {
+    setCurrentUser(null);
     await supabase.auth.signOut();
   }
 
-  /** Update profile fields for the logged-in user */
+  // ── Update profile fields for the current user ───────────────────────────────
   async function updateCurrentUser(updates: Partial<User>): Promise<void> {
     if (!currentUser) return;
 
     const mapped: Record<string, unknown> = {};
-    if (updates.name)          mapped.name           = updates.name;
-    if (updates.avatarId)      mapped.avatar_id      = updates.avatarId;
+    if (updates.name)           mapped.name            = updates.name;
+    if (updates.avatarId)       mapped.avatar_id       = updates.avatarId;
     if (updates.avatarInitials) mapped.avatar_initials = updates.avatarInitials;
-    if (updates.role)          mapped.role           = updates.role;
+    if (updates.role)           mapped.role            = updates.role;
 
     const { error } = await supabase
       .from('profiles')
@@ -140,7 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ currentUser, loading, login, signUp, logout, updateCurrentUser }}>
+    <AuthContext.Provider value={{ currentUser, loading, ready, login, signUp, logout, updateCurrentUser }}>
       {children}
     </AuthContext.Provider>
   );
