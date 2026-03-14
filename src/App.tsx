@@ -51,6 +51,8 @@ function AppRoutes() {
       {/* Public — no auth required */}
       <Route path="/login"   element={currentUser ? <Navigate to="/" replace /> : <Login />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
+      {/* Auth callback — handles email verification redirect from Supabase */}
+      <Route path="/auth/callback" element={<Navigate to="/" replace />} />
 
       {/* Guest-accessible pages (visible to everyone, read-only for guests) */}
       <Route path="/"        element={<ProtectedRoute requireAuth={false}><Home /></ProtectedRoute>} />

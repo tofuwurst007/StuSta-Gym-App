@@ -61,11 +61,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function loadProfile(session: Session) {
-    const { data: profile } = await supabase
+    let { data: profile } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', session.user.id)
       .single();
+
+    // If the trigger didn't create a profile yet, create one now
+    if (!profile) {
+      const name = session.user.user_metadata?.name
+        ?? session.user.email?.split('@')[0]
+        ?? 'User';
+      const { data: created } = await supabase.from('profiles').upsert({
+        id: session.user.id,
+        name,
+        email: session.user.email ?? '',
+        role: 'member',
+        avatar_initials: name.charAt(0).toUpperCase(),
+      }).select().single();
+      profile = created;
+    }
 
     if (profile) {
       setCurrentUser(profileToUser(profile as Record<string, unknown>, session));
