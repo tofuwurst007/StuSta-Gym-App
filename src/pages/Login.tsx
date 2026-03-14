@@ -37,8 +37,13 @@ export default function Login() {
       try {
         await login(email, password);
         navigate(next, { replace: true });
-      } catch {
-        setError('Invalid email or password. Please try again.');
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : '';
+        if (msg.toLowerCase().includes('email not confirmed')) {
+          setError('Please confirm your email first. Check your inbox for the verification link.');
+        } else {
+          setError('Invalid email or password. Please try again.');
+        }
       }
     }
   }
