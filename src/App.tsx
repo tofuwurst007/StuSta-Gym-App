@@ -17,6 +17,8 @@ import SpontaneousOpen from './pages/supervisor/SpontaneousOpen';
 import UserManagement from './pages/admin/UserManagement';
 import ShiftplanEditor from './pages/admin/ShiftplanEditor';
 import AttendanceLogs from './pages/admin/AttendanceLogs';
+import EditMemberCard from './pages/admin/EditMemberCard';
+import MembersList from './pages/supervisor/MembersList';
 
 // ─── Route guard ──────────────────────────────────────────────────────────────
 // requireAuth:  redirect guests to /login (preserving the intended destination)
@@ -82,6 +84,8 @@ function AppRoutes() {
       {/* Supervisor + Admin */}
       <Route path="/shifts"      element={<ProtectedRoute requireRole="supervisor"><MyShifts /></ProtectedRoute>} />
       <Route path="/spontaneous" element={<ProtectedRoute requireRole="supervisor"><SpontaneousOpen /></ProtectedRoute>} />
+      <Route path="/members"     element={<ProtectedRoute requireRole="supervisor"><MembersList /></ProtectedRoute>} />
+      <Route path="/members/:userId" element={<ProtectedRoute requireRole="supervisor"><EditMemberCard /></ProtectedRoute>} />
 
       {/* Admin only */}
       <Route path="/admin/users"      element={<ProtectedRoute requireRole="admin"><UserManagement /></ProtectedRoute>} />

@@ -74,7 +74,10 @@ function reducer(state: AppState, action: Action): AppState {
 function toUser(r: any): User {
   return {
     id: r.id, name: r.name ?? '', email: r.email ?? '', role: r.role ?? 'member',
-    house: '', room: '', dateOfBirth: '', membershipStart: '', membershipEnd: '',
+    house: r.house ?? '', room: r.room ?? '',
+    dateOfBirth: r.date_of_birth ?? '',
+    membershipStart: r.membership_start ?? '',
+    membershipEnd: r.membership_end ?? '',
     createdAt: r.created_at ?? '', avatarInitials: r.avatar_initials ?? '',
     avatarId: r.avatar_id ?? undefined,
   };
@@ -181,6 +184,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               role: action.payload.role,
               avatar_id: action.payload.avatarId ?? null,
               avatar_initials: action.payload.avatarInitials ?? null,
+              house: action.payload.house || null,
+              room: action.payload.room || null,
+              date_of_birth: action.payload.dateOfBirth || null,
+              membership_start: action.payload.membershipStart || null,
+              membership_end: action.payload.membershipEnd || null,
             }).eq('id', action.payload.id);
             break;
           case 'DELETE_USER':

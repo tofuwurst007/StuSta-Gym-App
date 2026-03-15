@@ -794,7 +794,7 @@ body {
 .day-tabs::-webkit-scrollbar { display: none; }
 .day-tab {
   padding: 6px 14px;
-  border-radius: var(--radius-xs);
+  border-radius: 20px;
   border: none;
   background: transparent;
   color: var(--text2);
@@ -803,12 +803,12 @@ body {
   transition: all var(--dur-fast) var(--ease);
   font-family: var(--font);
 }
-.day-tab:hover { background: var(--surface); color: var(--text); }
+.day-tab:hover { background: var(--surface1); color: var(--text); }
 .day-tab-active {
-  background: var(--surface);
-  color: var(--accent);
+  background: var(--accent);
+  color: #fff;
   font-weight: 700;
-  box-shadow: var(--shadow-xs);
+  box-shadow: 0 2px 8px rgba(0,200,150,0.35);
 }
 
 /* ── User list ────────────────────────────────────── */
@@ -1469,7 +1469,7 @@ body {
   border-radius: 4px; padding: 1px 6px; font-weight: 600;
 }
 
-.admin-user-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.admin-user-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
 .admin-action-btn {
   padding: 5px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border);
   background: var(--surface3); color: var(--text2); font-size: 12px; font-weight: 500;
@@ -1478,7 +1478,41 @@ body {
 .admin-action-btn:disabled { opacity: .35; cursor: not-allowed; }
 .admin-action-btn.promote:not(:disabled):hover { background: #22c55e; border-color: #22c55e; color: #fff; }
 .admin-action-btn.demote:not(:disabled):hover  { background: #f59e0b; border-color: #f59e0b; color: #fff; }
+.admin-action-btn.edit { background: var(--surface3); color: var(--text2); }
+.admin-action-btn.edit:not(:disabled):hover    { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Delete is always visibly red */
+.admin-action-btn.delete {
+  background: rgba(239,68,68,.1); border-color: rgba(239,68,68,.35); color: #ef4444;
+  width: 30px; height: 30px; padding: 0; display: flex; align-items: center; justify-content: center;
+}
 .admin-action-btn.delete:not(:disabled):hover  { background: #ef4444; border-color: #ef4444; color: #fff; }
+.admin-action-btn.delete svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* ── Members list (supervisor view) ──────────────── */
+.members-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.member-list-card {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface1); border: 1px solid var(--border2);
+  border-radius: var(--radius); padding: 12px 14px;
+  transition: border-color var(--dur-fast);
+}
+.member-list-card:hover { border-color: var(--border); }
+.member-list-info { flex: 1; min-width: 0; }
+.member-list-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.member-list-email { font-size: 12px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Edit member card page ────────────────────────── */
+.edit-card-preview {
+  background: var(--surface1); border: 1px solid var(--border2);
+  border-radius: var(--radius-lg); padding: 20px; margin-bottom: 24px;
+  display: flex; align-items: center; gap: 14px;
+}
+.edit-card-preview-info { flex: 1; min-width: 0; }
+.edit-card-preview-name { font-size: 16px; font-weight: 700; color: var(--text); }
+.edit-card-preview-email { font-size: 12px; color: var(--text3); }
+.edit-card-form { display: flex; flex-direction: column; gap: 16px; }
+.edit-card-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 480px) { .edit-card-row { grid-template-columns: 1fr; } }
 
 .role-badge {
   font-size: 11px; font-weight: 600; padding: 3px 8px;

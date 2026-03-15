@@ -111,6 +111,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => { logout(); navigate('/login'); };
   const closeDrawer  = () => setDrawerOpen(false);
+  const drawerLogout = () => { closeDrawer(); handleLogout(); };
 
   // ── Nav links ───────────────────────────────────────────────────────────────
   const navContent = (onClick?: () => void) => (
@@ -167,6 +168,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <NavLink to="/spontaneous" onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
             <span className="nav-icon">{Icon.bolt}</span>
             <span className="nav-text">Spontaneous Open</span>
+          </NavLink>
+          <NavLink to="/members" onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
+            <span className="nav-icon">{Icon.users}</span>
+            <span className="nav-text">Members</span>
           </NavLink>
         </div>
       )}
@@ -297,7 +302,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <button className="btn-icon-sm" onClick={closeDrawer} aria-label="Close">✕</button>
             </div>
             <div className="sidebar-scroll">{navContent(closeDrawer)}</div>
-            {sidebarFooter(closeDrawer)}
+            {sidebarFooter(drawerLogout)}
           </nav>
         </div>
 
