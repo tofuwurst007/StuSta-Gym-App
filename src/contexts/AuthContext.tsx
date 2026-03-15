@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import type { User } from '../types';
 import { supabase } from '../lib/supabase';
 import type { Session } from '@supabase/supabase-js';
@@ -15,17 +15,6 @@ function profileToUser(p: Record<string, unknown>, s: Session): User {
     createdAt: String(p.created_at ?? ''),
     avatarInitials: String(p.avatar_initials ?? ''),
     avatarId: p.avatar_id ? String(p.avatar_id) : undefined,
-  };
-}
-
-function userFromSession(s: Session): User {
-  const name = String(s.user.user_metadata?.name ?? s.user.email?.split('@')[0] ?? 'User');
-  return {
-    id: s.user.id, name, email: s.user.email ?? '', role: 'member',
-    house: '', room: '', dateOfBirth: '',
-    membershipStart: '', membershipEnd: '',
-    createdAt: s.user.created_at ?? '',
-    avatarInitials: name.charAt(0).toUpperCase(), avatarId: undefined,
   };
 }
 
@@ -46,16 +35,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
 
-  // Store the raw Supabase session — updated synchronously inside
-  // onAuthStateChange so the SDK lock is released immediately.
+  // Store session — set synchronously inside onAuthStateChange so the SDK
+  // lock is released immediately. Profile loading happens in a separate effect.
   const [session, setSession] = useState<Session | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
+
+  // Track the last session id we've fetched a profile for,
+  // so we don't re-fetch on duplicate events.
+  const lastProfileFor = useRef<string | null>(null);
 
   // ── 1. Capture session synchronously (no async work here!) ────────────────
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, sess) => {
-        // Synchronous — just set state, don't fetch anything.
+        console.log('[Auth] onAuthStateChange event:', _event, sess?.user?.email ?? 'no user');
         setSession(sess);
         setSessionReady(true);
       }
@@ -63,91 +56,110 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // ── 2. Load profile in a separate effect (outside the lock) ───────────────
-  const profileLock = useRef(false);
+  // ── 2. Load profile (separate from the auth lock) ────────────────────────
+  const loadProfile = useCallback(async (s: Session) => {
+    const uid = s.user.id;
+
+    // Skip if we already loaded for this user
+    if (lastProfileFor.current === uid && currentUser) {
+      console.log('[Auth] profile already loaded for', s.user.email);
+      setReady(true);
+      return;
+    }
+
+    console.log('[Auth] loading profile for', s.user.email);
+
+    try {
+      // 1) Try reading the existing profile
+      const { data: profile, error: selErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', uid)
+        .single();
+
+      if (selErr) {
+        console.warn('[Auth] SELECT error:', selErr.message);
+      }
+
+      if (profile) {
+        console.log('[Auth] profile found, role =', profile.role);
+        lastProfileFor.current = uid;
+        setCurrentUser(profileToUser(profile as Record<string, unknown>, s));
+        setReady(true);
+        return;
+      }
+
+      // 2) No profile row — create one (INSERT only, never overwrites)
+      console.log('[Auth] no profile row, creating one...');
+      const name = s.user.user_metadata?.name
+        ?? s.user.email?.split('@')[0] ?? 'User';
+
+      const { data: created, error: insErr } = await supabase
+        .from('profiles')
+        .insert({
+          id: uid,
+          name,
+          email: s.user.email ?? '',
+          role: 'member',
+          avatar_initials: name.charAt(0).toUpperCase(),
+        })
+        .select()
+        .single();
+
+      if (insErr) {
+        console.warn('[Auth] INSERT failed:', insErr.message);
+        // Row likely already exists — try SELECT one more time
+        const { data: retry } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', uid)
+          .single();
+        if (retry) {
+          console.log('[Auth] retry SELECT succeeded, role =', retry.role);
+          lastProfileFor.current = uid;
+          setCurrentUser(profileToUser(retry as Record<string, unknown>, s));
+          setReady(true);
+          return;
+        }
+      }
+
+      if (created) {
+        console.log('[Auth] created new profile, role =', created.role);
+        lastProfileFor.current = uid;
+        setCurrentUser(profileToUser(created as Record<string, unknown>, s));
+        setReady(true);
+        return;
+      }
+
+      // 3) Fallback — use session data with member role
+      console.warn('[Auth] all DB attempts failed — using session fallback (member role)');
+      const name2 = s.user.user_metadata?.name ?? s.user.email?.split('@')[0] ?? 'User';
+      setCurrentUser({
+        id: uid, name: name2, email: s.user.email ?? '', role: 'member',
+        house: '', room: '', dateOfBirth: '',
+        membershipStart: '', membershipEnd: '',
+        createdAt: s.user.created_at ?? '',
+        avatarInitials: name2.charAt(0).toUpperCase(), avatarId: undefined,
+      });
+      setReady(true);
+    } catch (err) {
+      console.error('[Auth] loadProfile crashed:', err);
+      setReady(true);
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     if (!sessionReady) return;
 
     if (!session) {
       setCurrentUser(null);
+      lastProfileFor.current = null;
       setReady(true);
       return;
     }
 
-    let cancelled = false;
-
-    async function fetchProfile(s: Session) {
-      if (profileLock.current) return;
-      profileLock.current = true;
-
-      try {
-        // 1) Try reading the existing profile
-        const { data: profile, error: selErr } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', s.user.id)
-          .single();
-
-        if (selErr) console.warn('[Auth] SELECT error:', selErr.message);
-
-        if (profile && !cancelled) {
-          setCurrentUser(profileToUser(profile as Record<string, unknown>, s));
-          return;
-        }
-
-        // 2) No profile — create one (INSERT, not upsert, to preserve roles)
-        const name = s.user.user_metadata?.name
-          ?? s.user.email?.split('@')[0] ?? 'User';
-
-        const { data: created, error: insErr } = await supabase
-          .from('profiles')
-          .insert({
-            id: s.user.id,
-            name,
-            email: s.user.email ?? '',
-            role: 'member',
-            avatar_initials: name.charAt(0).toUpperCase(),
-          })
-          .select()
-          .single();
-
-        if (insErr) {
-          console.warn('[Auth] INSERT failed:', insErr.message, '— retrying SELECT');
-          const { data: retry } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', s.user.id)
-            .single();
-          if (retry && !cancelled) {
-            setCurrentUser(profileToUser(retry as Record<string, unknown>, s));
-            return;
-          }
-        }
-
-        if (created && !cancelled) {
-          setCurrentUser(profileToUser(created as Record<string, unknown>, s));
-          return;
-        }
-
-        // 3) Fallback — use session data so user isn't stuck as guest
-        if (!cancelled) {
-          console.warn('[Auth] falling back to session-only user');
-          setCurrentUser(userFromSession(s));
-        }
-      } catch (err) {
-        console.error('[Auth] loadProfile crashed:', err);
-        if (!cancelled) setCurrentUser(userFromSession(s));
-      } finally {
-        profileLock.current = false;
-        if (!cancelled) setReady(true);
-      }
-    }
-
-    fetchProfile(session);
-
-    return () => { cancelled = true; };
-  }, [session, sessionReady]);
+    loadProfile(session);
+  }, [session, sessionReady, loadProfile]);
 
   // ── Auth actions ──────────────────────────────────────────────────────────
   async function login(email: string, password: string): Promise<void> {
@@ -155,14 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw new Error(error.message);
-      // onAuthStateChange will fire → setSession → useEffect → loadProfile
-      // Wait for profile to load before caller navigates
-      await new Promise<void>((resolve) => {
-        const t = setInterval(() => {
-          if (!profileLock.current) { clearInterval(t); resolve(); }
-        }, 50);
-        setTimeout(() => { clearInterval(t); resolve(); }, 3000);
-      });
+      // onAuthStateChange → setSession → useEffect → loadProfile
     } finally {
       setLoading(false);
     }
@@ -184,6 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function logout(): Promise<void> {
+    lastProfileFor.current = null;
     setCurrentUser(null);
     await supabase.auth.signOut();
   }
