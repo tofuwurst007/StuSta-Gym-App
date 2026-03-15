@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import type { User } from '../types';
 import { supabase } from '../lib/supabase';
 import type { Session } from '@supabase/supabase-js';
@@ -192,8 +193,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function logout(): Promise<void> {
-    lastProfileFor.current = null;
-    setCurrentUser(null);
+    // flushSync forces React to apply the state update synchronously,
+    // so the UI reflects currentUser=null before we navigate away.
+    flushSync(() => {
+      lastProfileFor.current = null;
+      setCurrentUser(null);
+      setSession(null);
+    });
     await supabase.auth.signOut();
   }
 

@@ -1,14 +1,11 @@
 import { useState, FormEvent } from 'react';
-import { useNavigate, useSearchParams, NavLink } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 type Mode = 'signin' | 'signup';
 
 export default function Login() {
   const { login, signUp, loading } = useAuth();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const next = searchParams.get('next') ?? '/';
 
   const [mode, setMode]         = useState<Mode>('signin');
   const [name, setName]         = useState('');
@@ -36,7 +33,8 @@ export default function Login() {
     } else {
       try {
         await login(email, password);
-        navigate(next, { replace: true });
+        // No navigate() here — LoginRoute in App.tsx watches currentUser
+        // and redirects once loadProfile() sets it, avoiding the race condition.
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : '';
         if (msg.toLowerCase().includes('email not confirmed')) {

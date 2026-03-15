@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppProvider } from './contexts/AppContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -49,6 +49,16 @@ function ProtectedRoute({
   return <Layout>{children}</Layout>;
 }
 
+// Reads ?next= from URL and redirects there once the user is logged in.
+// This way Login.tsx never needs to call navigate() — the redirect fires
+// only after currentUser is actually set (avoiding the race condition).
+function LoginRoute({ currentUser }: { currentUser: boolean }) {
+  const [searchParams] = useSearchParams();
+  const next = searchParams.get('next') ?? '/';
+  if (currentUser) return <Navigate to={next} replace />;
+  return <Login />;
+}
+
 function AppRoutes() {
   const { currentUser, ready } = useAuth();
 
@@ -68,7 +78,10 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Public — no auth required */}
-      <Route path="/login"   element={currentUser ? <Navigate to="/" replace /> : <Login />} />
+      {/* LoginRoute: auto-redirects to ?next= when currentUser is set,
+          so Login.tsx doesn't need to navigate() — avoids the race where
+          the route re-renders before loadProfile finishes. */}
+      <Route path="/login" element={<LoginRoute currentUser={!!currentUser} />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
       {/* Auth callback — handles email verification redirect from Supabase */}
       <Route path="/auth/callback" element={<AuthCallback />} />
