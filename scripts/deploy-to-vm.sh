@@ -24,8 +24,10 @@ STAMP=$(date +%Y%m%d_%H%M%S)
 echo "[1/7] Uploading source, migration and server config..."
 # .env* stay on the VM (they hold the production URL/key); src/public are replaced
 # completely so deleted files (e.g. the Klaro consent banner) are gone there too.
-tar czf - src public index.html package.json package-lock.json tsconfig.json vite.config.ts \
-    "$MIGRATION" server/Caddyfile server/backup.sh \
+FILES=(src index.html package.json package-lock.json tsconfig.json vite.config.ts
+       "$MIGRATION" server/Caddyfile server/backup.sh)
+[ -d public ] && FILES+=(public)   # optional: only static assets, may not exist
+tar czf - "${FILES[@]}" \
   | ssh gym "mkdir -p /tmp/gym-deploy && rm -rf /tmp/gym-deploy/* && tar xzf - -C /tmp/gym-deploy"
 
 ssh gym STAMP="$STAMP" MIGRATION="$MIGRATION" bash -s << 'REMOTE'
@@ -49,8 +51,9 @@ echo "       OK"
 echo "[4/7] Building frontend..."
 cp -a "$APP/src" "$APP/src.bak.$STAMP"
 rm -rf "$APP/src" "$APP/public"
-cp -a "$NEW/src" "$NEW/public" "$NEW/index.html" "$NEW/package.json" "$NEW/package-lock.json" \
+cp -a "$NEW/src" "$NEW/index.html" "$NEW/package.json" "$NEW/package-lock.json" \
       "$NEW/tsconfig.json" "$NEW/vite.config.ts" "$APP/"
+[ -d "$NEW/public" ] && cp -a "$NEW/public" "$APP/"
 mkdir -p "$APP/supabase/migrations" && cp "$NEW/$MIGRATION" "$APP/supabase/migrations/"
 cd "$APP"
 npm ci --silent
