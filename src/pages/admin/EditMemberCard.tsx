@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -7,24 +7,33 @@ import { AvatarDisplay } from '../../components/AvatarPicker';
 export default function EditMemberCard() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
-  const { state, dispatch } = useApp();
+  const { state, dispatch, loading } = useApp();
   const { currentUser } = useAuth();
 
   const user = state.users.find(u => u.id === userId);
 
-  const [form, setForm] = useState({
-    house:           user?.house           ?? '',
-    room:            user?.room            ?? '',
-    dateOfBirth:     user?.dateOfBirth     ?? '',
-    membershipStart: user?.membershipStart ?? '',
-    membershipEnd:   user?.membershipEnd   ?? '',
-  });
+  const [form, setForm] = useState({ house: '', room: '', dateOfBirth: '', membershipStart: '', membershipEnd: '' });
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  // Fill the form once the user is loaded (on a direct link/reload the list arrives after mount;
+  // saving an empty form would wipe the stored values)
+  useEffect(() => {
+    if (!user) return;
+    setForm({
+      house:           user.house,
+      room:            user.room,
+      dateOfBirth:     user.dateOfBirth,
+      membershipStart: user.membershipStart,
+      membershipEnd:   user.membershipEnd,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   if (!user) {
     return (
       <div className="page">
-        <p className="empty-state">User not found.</p>
+        <p className="empty-state">{loading ? 'Loading…' : 'User not found.'}</p>
       </div>
     );
   }
@@ -34,8 +43,10 @@ export default function EditMemberCard() {
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
 
-  const handleSave = () => {
-    dispatch({ type: 'UPDATE_USER', payload: { ...user, ...form } });
+  const handleSave = async () => {
+    setSaveError('');
+    const res = await dispatch({ type: 'UPDATE_USER', payload: { ...user, ...form } });
+    if (!res.ok) { setSaveError(res.error ?? 'Could not save the changes.'); return; }
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
@@ -59,6 +70,8 @@ export default function EditMemberCard() {
 
       {isSelf ? (
         <p className="empty-state">You cannot edit your own card.</p>
+      ) : user.role === 'admin' && currentUser?.role !== 'admin' ? (
+        <p className="empty-state">Only admins can edit admin profiles.</p>
       ) : (
         <div className="edit-card-form">
           <div className="edit-card-row">
@@ -98,6 +111,7 @@ export default function EditMemberCard() {
               ✓ Changes saved
             </p>
           )}
+          {saveError && <p className="form-error" style={{ textAlign: 'center' }}>{saveError}</p>}
         </div>
       )}
     </div>

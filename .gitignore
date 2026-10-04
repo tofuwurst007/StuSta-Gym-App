@@ -22,3 +22,6 @@ gen_keystore.ps1
 backend/pocketbase.exe
 backend/pocketbase.zip
 backend/pb_data/
+
+# Local end-to-end test environment (local Supabase dev keys)
+.env.localtest

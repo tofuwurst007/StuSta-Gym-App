@@ -1,10 +1,9 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { inject } from '@vercel/analytics'
+// Self-hosted font: no requests to Google, so no consent needed (DSGVO)
+import '@fontsource-variable/inter'
 import App from './App.tsx'
 import './styles/global.css'
-
-inject()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

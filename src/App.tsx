@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-r
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppProvider } from './contexts/AppContext';
 import { ThemeProvider } from './contexts/ThemeContext';
-import GdprConsent from './components/GdprConsent';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -38,7 +37,7 @@ function ProtectedRoute({
   if (!ready) return null;
 
   if (requireAuth && !currentUser)
-    return <Navigate to={`/login?next=${encodeURIComponent(window.location.pathname)}`} replace />;
+    return <Navigate to={`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`} replace />;
 
   if (requireRole === 'supervisor' && currentUser?.role === 'member')
     return <Navigate to="/" replace />;
@@ -54,7 +53,9 @@ function ProtectedRoute({
 // only after currentUser is actually set (avoiding the race condition).
 function LoginRoute({ currentUser }: { currentUser: boolean }) {
   const [searchParams] = useSearchParams();
-  const next = searchParams.get('next') ?? '/';
+  // Only same-site paths: "//host" or "/\host" would be another origin and crash the router
+  const raw = searchParams.get('next') ?? '/';
+  const next = raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\') ? raw : '/';
   if (currentUser) return <Navigate to={next} replace />;
   return <Login />;
 }
@@ -113,8 +114,6 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      {/* GDPR consent banner — mounted before all providers so it fires on first paint */}
-      <GdprConsent />
       <ThemeProvider>
         <AuthProvider>
           <AppProvider>

@@ -1,0 +1,51 @@
+# =============================================================================
+# Caddy — gym.stusta.de
+# =============================================================================
+# TLS is terminated by the StuStaNet HAProxy (haproxy.stusta.mhn.de), which
+# forwards plain HTTP to this VM on port 80. Caddy therefore only serves :80.
+# =============================================================================
+
+{
+    auto_https off
+}
+
+:80 {
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options    "nosniff"
+        X-Frame-Options           "DENY"
+        Referrer-Policy           "strict-origin-when-cross-origin"
+        Permissions-Policy        "camera=(), microphone=(), geolocation=()"
+        Content-Security-Policy   "frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+        -Server
+    }
+
+    # --- Supabase API → Kong (only the public API prefixes) -----------------
+    # reverse_proxy handles websocket upgrades (realtime) on its own.
+    @api path /auth/v1/* /rest/v1/* /realtime/v1/* /storage/v1/* /graphql/v1 /graphql/v1/*
+    handle @api {
+        reverse_proxy localhost:8000
+    }
+
+    # --- Hashed build assets: cache forever, 404 when missing ---------------
+    handle /assets/* {
+        root * /var/www/stusta-gym
+        header Cache-Control "public, max-age=31536000, immutable"
+        encode zstd gzip
+        file_server
+    }
+
+    # --- Frontend SPA — everything else -------------------------------------
+    handle {
+        root * /var/www/stusta-gym
+        header Cache-Control "no-cache"
+        encode zstd gzip
+        try_files {path} /index.html
+        file_server
+    }
+
+    # DSGVO: no access logs
+    log {
+        output discard
+    }
+}

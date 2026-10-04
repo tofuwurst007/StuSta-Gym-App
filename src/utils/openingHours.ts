@@ -1,14 +1,17 @@
 import type { ShiftBlock, SpontaneousOpening } from '../types';
+import { localISODate } from './date';
 
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+export type OpeningSlot = { start: string; end: string; source: 'shift' | 'spontaneous'; label: string };
 
 export function getOpeningHoursForDay(
   dayOfWeek: number,
   shiftBlocks: ShiftBlock[],
   spontaneousOpenings: SpontaneousOpening[],
   date?: string,
-): { start: string; end: string; source: 'shift' | 'spontaneous'; label: string }[] {
-  const slots: { start: string; end: string; source: 'shift' | 'spontaneous'; label: string }[] = [];
+): OpeningSlot[] {
+  const slots: OpeningSlot[] = [];
 
   // Claimed shifts for this day
   shiftBlocks
@@ -29,19 +32,18 @@ export function getOpeningHoursForDay(
   return slots.sort((a, b) => a.start.localeCompare(b.start));
 }
 
-export function isGymOpenNow(shiftBlocks: ShiftBlock[], spontaneousOpenings: SpontaneousOpening[]): boolean {
-  const now = new Date();
-  const dayOfWeek = (now.getDay() + 6) % 7; // convert Sun=0 to Mon=0
-  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  const today = now.toISOString().split('T')[0];
-
-  const slots = getOpeningHoursForDay(dayOfWeek, shiftBlocks, spontaneousOpenings, today);
-  return slots.some(s => s.start <= timeStr && timeStr < s.end);
+/** Current local time as HH:mm */
+export function nowHHMM(now = new Date()): string {
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 }
 
 export function getTodayOpeningHours(shiftBlocks: ShiftBlock[], spontaneousOpenings: SpontaneousOpening[]) {
   const now = new Date();
-  const dayOfWeek = (now.getDay() + 6) % 7;
-  const today = now.toISOString().split('T')[0];
-  return getOpeningHoursForDay(dayOfWeek, shiftBlocks, spontaneousOpenings, today);
+  const dayOfWeek = (now.getDay() + 6) % 7; // convert Sun=0 to Mon=0
+  return getOpeningHoursForDay(dayOfWeek, shiftBlocks, spontaneousOpenings, localISODate(now));
+}
+
+export function isGymOpenNow(shiftBlocks: ShiftBlock[], spontaneousOpenings: SpontaneousOpening[]): boolean {
+  const timeStr = nowHHMM();
+  return getTodayOpeningHours(shiftBlocks, spontaneousOpenings).some(s => s.start <= timeStr && timeStr < s.end);
 }

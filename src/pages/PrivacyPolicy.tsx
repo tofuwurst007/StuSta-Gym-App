@@ -36,16 +36,17 @@ export default function PrivacyPolicy() {
               Diese Daten sind zur Nutzung der App zwingend erforderlich.
             </li>
             <li>
+              <strong>Mitgliedsdaten:</strong> Haus, Zimmer, Geburtsdatum und Mitgliedschaftszeitraum –
+              werden von Supervisoren bzw. Admins gepflegt und sind nur für Sie selbst sowie für
+              Supervisoren und Admins sichtbar.
+            </li>
+            <li>
               <strong>Nutzungsdaten:</strong> Schichtbuchungen, Anwesenheitsprotokolle,
               Spontanöffnungs-Registrierungen.
             </li>
             <li>
               <strong>Authentifizierungsdaten:</strong> Gespeichert als verschlüsseltes Session-Token
-              über Supabase Auth – das Passwort wird niemals im Klartext gespeichert.
-            </li>
-            <li>
-              <strong>Analytik (optional):</strong> Anonymisierte Seitenaufrufe über Vercel Analytics –
-              nur bei ausdrücklicher Einwilligung.
+              über die Anmeldefunktion (Supabase Auth) – das Passwort wird niemals im Klartext gespeichert.
             </li>
           </ul>
         </section>
@@ -62,10 +63,6 @@ export default function PrivacyPolicy() {
               <strong>Berechtigte Interessen – Art. 6 Abs. 1 lit. f DSGVO:</strong> Anwesenheits-
               protokolle und Schichtdaten dienen dem sicheren Betrieb des Fitnessstudios.
             </li>
-            <li>
-              <strong>Einwilligung – Art. 6 Abs. 1 lit. a DSGVO:</strong> Analyse-Cookies werden
-              nur gesetzt, wenn Sie ausdrücklich zustimmen.
-            </li>
           </ul>
         </section>
 
@@ -76,7 +73,6 @@ export default function PrivacyPolicy() {
             <li>Kontodaten: Für die Dauer der Mitgliedschaft + 1 Jahr.</li>
             <li>Anwesenheitsprotokolle: 6 Monate.</li>
             <li>Benachrichtigungen: 90 Tage.</li>
-            <li>Analyse-Daten (bei Einwilligung): bis zu 90 Tage.</li>
           </ul>
           <p style={{ marginTop: 8, fontSize: 13, color: 'var(--text2)' }}>
             Nach Ablauf dieser Fristen werden die Daten automatisch gelöscht, sofern keine
@@ -89,18 +85,14 @@ export default function PrivacyPolicy() {
           <h2>5. Empfänger & Drittanbieter (Third-party processors)</h2>
           <ul>
             <li>
-              <strong>Supabase Inc.</strong> (San Francisco, USA) – Datenbank und Authentifizierung.
-              Supabase ist nach dem EU-US Data Privacy Framework zertifiziert. Serverstandort: EU (Frankfurt).
-              Datenschutzrichtlinie: <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer">supabase.com/privacy</a>
+              <strong>StuStaNet e.V.</strong> (Studentenstadt München) – Betrieb des Servers
+              unter gym.stusta.de. Web-App, Datenbank und Anmeldung (selbst gehostete
+              Supabase-Software) laufen ausschließlich auf diesem Server; es findet keine
+              Übermittlung an Supabase Inc., Vercel oder in Drittländer statt.
             </li>
             <li>
-              <strong>Vercel Inc.</strong> (San Francisco, USA) – Hosting der Web-App.
-              Vercel ist nach dem EU-US Data Privacy Framework zertifiziert. Serverstandort: Frankfurt.
-              Datenschutzrichtlinie: <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer">vercel.com/legal/privacy-policy</a>
-            </li>
-            <li>
-              <strong>Vercel Analytics</strong> – Anonymisierte, aggregierte Nutzungsstatistiken
-              (nur bei Einwilligung, ohne Cookies).
+              <strong>E-Mail-Versand</strong> – Bestätigungs-E-Mails werden über den Mailserver
+              des StuStaNet e.V. versendet.
             </li>
           </ul>
           <p style={{ marginTop: 8, fontSize: 13, color: 'var(--text2)' }}>
@@ -119,7 +111,6 @@ export default function PrivacyPolicy() {
             <li><strong>Einschränkung (Art. 18 DSGVO)</strong> – Einschränkung der Verarbeitung.</li>
             <li><strong>Datenübertragbarkeit (Art. 20 DSGVO)</strong> – Herausgabe in maschinenlesbarem Format.</li>
             <li><strong>Widerspruch (Art. 21 DSGVO)</strong> – Widerspruch gegen auf berechtigtem Interesse beruhende Verarbeitung.</li>
-            <li><strong>Widerruf der Einwilligung</strong> – Cookie-Einstellungen jederzeit unten ändern.</li>
           </ul>
           <p style={{ marginTop: 8 }}>
             Zur Ausübung Ihrer Rechte wenden Sie sich bitte per E-Mail an{' '}
@@ -146,14 +137,13 @@ export default function PrivacyPolicy() {
         <section className="privacy-section">
           <h2>8. Cookies & Tracking</h2>
           <p>
-            Wir verwenden ausschließlich technisch notwendige Cookies (z. B. Session-Token für die Anmeldung)
-            sowie optionale Analyse-Cookies von Vercel Analytics – letztere nur mit Ihrer ausdrücklichen
-            Einwilligung gemäß Art. 6 Abs. 1 lit. a DSGVO.
-            Werbe-Tracking findet nicht statt.
+            Wir verwenden keine Analyse- oder Werbe-Cookies und kein Tracking. Im lokalen Speicher
+            Ihres Browsers (localStorage) werden ausschließlich technisch notwendige Daten abgelegt:
+            das Anmelde-Token (Session) und Ihre Design-Einstellung (hell/dunkel).
           </p>
-          <p style={{ marginTop: 8, fontSize: 13, color: 'var(--text2)' }}>
-            <em>Cookie preferences are requested once on your first visit. To reset,
-            clear your browser's localStorage for this site.</em>
+          <p style={{ marginTop: 8 }}>
+            Schriftarten werden vom eigenen Server geladen; Inhalte von Drittanbietern
+            (z. B. Google Fonts) werden nicht eingebunden.
           </p>
         </section>
 
@@ -161,7 +151,7 @@ export default function PrivacyPolicy() {
         <section className="privacy-section">
           <h2>9. Datensicherheit</h2>
           <p>
-            Die Übertragung aller Daten erfolgt verschlüsselt über HTTPS (TLS 1.3).
+            Die Übertragung aller Daten erfolgt verschlüsselt über HTTPS (TLS 1.2/1.3).
             Passwörter werden ausschließlich als bcrypt-Hash gespeichert. Zugriffe auf die
             Datenbank sind durch Row-Level Security (RLS) geschützt – jeder Nutzer sieht
             nur die ihm zustehenden Daten.

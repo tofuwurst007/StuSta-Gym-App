@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { DAY_NAMES } from '../../utils/openingHours';
-import type { ShiftBlock } from '../../types';
+import type { ShiftBlock, Notification } from '../../types';
 
 export default function ShiftplanEditor() {
   const { state, dispatch } = useApp();
@@ -39,8 +39,22 @@ export default function ShiftplanEditor() {
     dispatch({ type: 'DELETE_SHIFT', payload: id });
   };
 
-  const unassign = (id: string) => {
-    dispatch({ type: 'UNCLAIM_SHIFT', payload: id });
+  const unassign = async (id: string) => {
+    const shift = state.shiftBlocks.find(s => s.id === id);
+    const res = await dispatch({ type: 'UNCLAIM_SHIFT', payload: id });
+    if (!res.ok || !shift) return; // the error banner shows why
+
+    // Same notice as when a supervisor cancels the shift themselves
+    const notif: Notification = {
+      id: `n-${Date.now()}`,
+      userId: 'all',
+      message: `The shift ${DAY_NAMES[shift.dayOfWeek]} ${shift.startTime}–${shift.endTime}` +
+        `${shift.supervisorName ? ` (${shift.supervisorName})` : ''} was unassigned. Opening hours may have changed.`,
+      type: 'alert',
+      read: false,
+      createdAt: new Date().toISOString(),
+    };
+    dispatch({ type: 'ADD_NOTIFICATION', payload: notif });
   };
 
   return (

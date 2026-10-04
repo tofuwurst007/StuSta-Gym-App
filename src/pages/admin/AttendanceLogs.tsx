@@ -41,11 +41,14 @@ export default function AttendanceLogs() {
         <p className="empty-state">No attendance records yet.</p>
       ) : (
         <div className="log-list">
-          {state.attendanceLogs.map(log => (
+          {state.attendanceLogs.map(log => {
+            // Older rows have no stored name; fall back to the profile
+            const name = log.userName || state.users.find(u => u.id === log.userId)?.name || 'Unknown';
+            return (
             <div key={log.id} className={`log-row ${!log.checkOut ? 'log-active' : ''}`}>
-              <div className="log-avatar">{log.userName.split(' ').map((p: string) => p[0]).join('').toUpperCase().slice(0, 2)}</div>
+              <div className="log-avatar">{name.split(' ').map((p: string) => p[0]).join('').toUpperCase().slice(0, 2)}</div>
               <div className="log-info">
-                <span className="log-name">{log.userName}</span>
+                <span className="log-name">{name}</span>
                 <span className="log-time">In: {formatDt(log.checkIn)}</span>
                 {log.checkOut && <span className="log-time">Out: {formatDt(log.checkOut)}</span>}
               </div>
@@ -56,7 +59,8 @@ export default function AttendanceLogs() {
                 <button className="btn-ghost-sm" onClick={() => checkOut(log.id)}>Check Out</button>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

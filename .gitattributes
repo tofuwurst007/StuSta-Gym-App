@@ -1,0 +1,5 @@
+# Files that run on the Linux VM must keep LF line endings,
+# even on Windows checkouts with core.autocrlf=true (CRLF breaks bash scripts).
+*.sh            text eol=lf
+*.sql           text eol=lf
+server/Caddyfile text eol=lf

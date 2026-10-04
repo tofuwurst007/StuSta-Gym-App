@@ -2,20 +2,22 @@ import { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
 import type { SpontaneousOpening, Notification } from '../../types';
+import { localISODate } from '../../utils/date';
 
 export default function SpontaneousOpen() {
   const { state, dispatch } = useApp();
   const { currentUser } = useAuth();
-  if (!currentUser) return null;
+  const today = localISODate();
 
-  const today = new Date().toISOString().split('T')[0];
-
+  // Hooks must run before the early return below
   const [form, setForm] = useState({ date: today, startTime: '', endTime: '', note: '' });
   const [error, setError] = useState('');
 
+  if (!currentUser) return null;
+
   const myOpenings = state.spontaneousOpenings.filter(sp => sp.supervisorId === currentUser.id);
 
-  const submit = () => {
+  const submit = async () => {
     setError('');
     if (!form.startTime || !form.endTime) { setError('Start and end time are required.'); return; }
     if (form.startTime >= form.endTime) { setError('End time must be after start time.'); return; }
@@ -29,12 +31,13 @@ export default function SpontaneousOpen() {
       endTime: form.endTime,
       note: form.note || undefined,
     };
-    dispatch({ type: 'ADD_SPONTANEOUS', payload: opening });
+    const res = await dispatch({ type: 'ADD_SPONTANEOUS', payload: opening });
+    if (!res.ok) { setError(res.error ?? 'Could not save the opening.'); return; }
 
     const notif: Notification = {
       id: `n-${Date.now()}`,
       userId: 'all',
-      message: `🏋️ Extra session on ${form.date}: ${form.startTime}–${form.endTime} by ${currentUser.name}.`,
+      message: `Extra session on ${form.date}: ${form.startTime}–${form.endTime} by ${currentUser.name}.`,
       type: 'info',
       read: false,
       createdAt: new Date().toISOString(),
@@ -43,12 +46,15 @@ export default function SpontaneousOpen() {
     setForm({ date: today, startTime: '', endTime: '', note: '' });
   };
 
-  const remove = (id: string) => {
-    dispatch({ type: 'DELETE_SPONTANEOUS', payload: id });
+  const remove = async (id: string) => {
+    const sp = state.spontaneousOpenings.find(o => o.id === id);
+    const res = await dispatch({ type: 'DELETE_SPONTANEOUS', payload: id });
+    if (!res.ok) return; // the error banner shows why
+    const when = sp ? ` (${sp.date} ${sp.startTime}–${sp.endTime})` : '';
     const notif: Notification = {
       id: `n-${Date.now()}`,
       userId: 'all',
-      message: `⚠️ A spontaneous opening was cancelled by ${currentUser.name}.`,
+      message: `The extra session${when} was cancelled by ${currentUser.name}.`,
       type: 'warning',
       read: false,
       createdAt: new Date().toISOString(),

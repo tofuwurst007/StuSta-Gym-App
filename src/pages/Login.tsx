@@ -1,24 +1,44 @@
 import { useState, FormEvent } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 type Mode = 'signin' | 'signup';
 
 export default function Login() {
-  const { login, signUp, loading } = useAuth();
+  const { login, signUp, resendVerification, loading } = useAuth();
+  const [searchParams] = useSearchParams();
 
   const [mode, setMode]         = useState<Mode>('signin');
   const [name, setName]         = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
-  const [error, setError]       = useState('');
+  // /auth/callback sends failed verification links here with ?verify=failed
+  const [error, setError]       = useState(searchParams.get('verify') === 'failed'
+    ? 'This verification link is invalid or has expired. Sign in to get a new one.' : '');
   const [info, setInfo]         = useState('');
+  const [canResend, setCanResend] = useState(false);
+
+  async function handleResend() {
+    setError('');
+    setInfo('');
+    try {
+      await resendVerification(email);
+      setInfo('A new verification email is on its way. Check your inbox.');
+      setCanResend(false);
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      setError(status === 429
+        ? 'Please wait a minute before requesting another email.'
+        : err instanceof Error ? err.message : 'Could not send the email. Please try again.');
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
     setInfo('');
+    setCanResend(false);
 
     if (mode === 'signup') {
       if (password !== confirm) { setError('Passwords do not match.'); return; }
@@ -36,11 +56,19 @@ export default function Login() {
         // No navigate() here — LoginRoute in App.tsx watches currentUser
         // and redirects once loadProfile() sets it, avoiding the race condition.
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : '';
-        if (msg.toLowerCase().includes('email not confirmed')) {
+        const msg = err instanceof Error ? err.message.toLowerCase() : '';
+        const status = (err as { status?: number }).status;
+        if (msg.includes('email not confirmed')) {
           setError('Please confirm your email first. Check your inbox for the verification link.');
-        } else {
+          setCanResend(true);
+        } else if (msg.includes('invalid login credentials')) {
           setError('Invalid email or password. Please try again.');
+        } else if (status === 429 || msg.includes('rate limit')) {
+          setError('Too many attempts. Please wait a moment and try again.');
+        } else if (err instanceof TypeError || msg.includes('failed to fetch') || msg.includes('network')) {
+          setError("Can't reach the server. Check your connection and try again.");
+        } else {
+          setError(err instanceof Error ? err.message : 'Sign-in failed. Please try again.');
         }
       }
     }
@@ -60,12 +88,12 @@ export default function Login() {
         <div className="login-tabs">
           <button
             className={`login-tab ${mode === 'signin' ? 'active' : ''}`}
-            onClick={() => { setMode('signin'); setError(''); setInfo(''); }}
+            onClick={() => { setMode('signin'); setError(''); setInfo(''); setCanResend(false); }}
             type="button"
           >Sign in</button>
           <button
             className={`login-tab ${mode === 'signup' ? 'active' : ''}`}
-            onClick={() => { setMode('signup'); setError(''); setInfo(''); }}
+            onClick={() => { setMode('signup'); setError(''); setInfo(''); setCanResend(false); }}
             type="button"
           >Create account</button>
         </div>
@@ -133,6 +161,11 @@ export default function Login() {
           )}
 
           {error && <p className="login-error">{error}</p>}
+          {canResend && (
+            <button className="btn btn-ghost" type="button" onClick={handleResend} disabled={loading || !email}>
+              Resend verification email
+            </button>
+          )}
           {info  && <p className="login-info">{info}</p>}
 
           <button className="btn btn-primary login-submit" type="submit" disabled={loading}>

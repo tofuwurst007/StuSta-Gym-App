@@ -7,6 +7,8 @@
 
 /* ── Light tokens ─────────────────────────────────── */
 :root {
+  color-scheme: light;
+
   /* Backgrounds */
   --bg:            #F5F7FB;
   --bg2:           #EAEFF8;
@@ -68,12 +70,14 @@
   /* Layout */
   --topbar-h:      56px;
   --sidebar-w:     232px;
-  --font:          'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  --font:          'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
   --font-mono:     'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
 }
 
 /* ── Dark tokens ──────────────────────────────────── */
 [data-theme="dark"] {
+  color-scheme: dark; /* dark scrollbars, form controls and overscroll area */
+
   --bg:            #050D1A;
   --bg2:           #091526;
   --surface:       #0D1E35;
@@ -697,6 +701,71 @@ body {
 .status-expired { background: var(--red-dim); color: var(--red); }
 .card-note { font-size: 12px; color: var(--text3); max-width: 400px; line-height: 1.5; }
 
+/* ── Sync error banner (failed saves) ─────────────── */
+.sync-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--red-dim);
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 600;
+}
+.sync-error-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+}
+
+/* ── Member card Coming Soon overlay ─────────────── */
+.member-card-wrapper {
+  position: relative;
+  max-width: 400px;
+}
+.member-card-blurred {
+  filter: blur(6px);
+  pointer-events: none;
+  user-select: none;
+}
+.coming-soon-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 2;
+}
+.coming-soon-badge {
+  background: var(--gradient);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 10px 32px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+}
+.coming-soon-text {
+  font-size: 13px;
+  color: var(--text2);
+  text-align: center;
+  max-width: 280px;
+  line-height: 1.5;
+  background: var(--surface-glass);
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  backdrop-filter: blur(4px);
+}
+
 /* ── Notifications ────────────────────────────────── */
 .notif-btn {
   position: relative;
@@ -1136,6 +1205,10 @@ body {
   font-size: 15px; font-weight: 700; letter-spacing: -0.3px; flex: 1;
   min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   color: var(--text);
+}
+/* Phones: give the week range its own row above the buttons instead of truncating it */
+@media (max-width: 480px) {
+  .cal-week-label { flex-basis: 100%; order: -1; }
 }
 .cal-wrap {
   background: var(--surface);

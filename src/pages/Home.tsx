@@ -1,12 +1,23 @@
+import { useEffect, useState } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { DAY_NAMES, getOpeningHoursForDay, isGymOpenNow, getTodayOpeningHours } from '../utils/openingHours';
+import { DAY_NAMES, getOpeningHoursForDay, isGymOpenNow, getTodayOpeningHours, nowHHMM } from '../utils/openingHours';
+import { localISODate } from '../utils/date';
 
 export default function Home() {
-  const { state } = useApp();
+  const { state, loading, loadError } = useApp();
+
+  // Re-render every 30 s so "Open/Closed" and "Opens today at" follow the clock
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const gymOpen = isGymOpenNow(state.shiftBlocks, state.spontaneousOpenings);
   const todaySlots = getTodayOpeningHours(state.shiftBlocks, state.spontaneousOpenings);
   const todayDow = (new Date().getDay() + 6) % 7;
-  const today = new Date().toISOString().split('T')[0];
+  const today = localISODate();
+  const nextSlot = todaySlots.find(s => s.start > nowHHMM());
 
   return (
     <div className="page">
@@ -18,16 +29,25 @@ export default function Home() {
       <div className={`status-card ${gymOpen ? 'status-open' : 'status-closed'}`}>
         <div className="status-dot" />
         <div>
-          <p className="status-title">{gymOpen ? 'Gym is Open' : 'Gym is Closed'}</p>
+          <p className="status-title">
+            {loading ? 'Loading…' : loadError ? 'Schedule unavailable' : gymOpen ? 'Gym is Open' : 'Gym is Closed'}
+          </p>
           <p className="status-sub">
-            {gymOpen
+            {loading || loadError
+              ? loadError ? "Couldn't load the opening hours. Please try again later." : ' '
+              : gymOpen
               ? `Today's remaining slots below`
+              : nextSlot
+              ? `Opens today at ${nextSlot.start}`
               : todaySlots.length > 0
-              ? `Opens today at ${todaySlots[0].start}`
+              ? 'No more sessions today'
               : 'No scheduled openings today'}
           </p>
         </div>
       </div>
+
+      {/* Without data the schedule would wrongly read "Closed" every day, so hide it */}
+      {!loading && !loadError && (<>
 
       {/* Today */}
       <section className="section">
@@ -83,6 +103,7 @@ export default function Home() {
           ))}
         </section>
       )}
+      </>)}
     </div>
   );
 }

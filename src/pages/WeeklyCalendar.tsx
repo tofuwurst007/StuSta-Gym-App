@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { exportShiftsICS, exportSpontaneousICS, googleCalendarLink } from '../utils/calendarExport';
+import { localISODate } from '../utils/date';
 
 const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -33,10 +34,6 @@ function addDays(date: Date, n: number): Date {
   return d;
 }
 
-function fmtDate(d: Date) {
-  return d.toISOString().split('T')[0];
-}
-
 function fmtWeekRange(monday: Date): string {
   const sunday = addDays(monday, 6);
   const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
@@ -66,7 +63,7 @@ export default function WeeklyCalendar() {
     bodyRef.current.scrollTop = Math.max(0, y - 80);
   }, [isCurrentWeek, hourPx]);
 
-  const todayStr = fmtDate(today);
+  const todayStr = localISODate(today);
 
   // Current time position
   const nowH = today.getHours();
@@ -109,7 +106,7 @@ export default function WeeklyCalendar() {
           <div className="cal-header-cell" />
           {Array.from({ length: 7 }, (_, i) => {
             const d = addDays(monday, i);
-            const ds = fmtDate(d);
+            const ds = localISODate(d);
             const isTdy = ds === todayStr;
             return (
               <div key={i} className={`cal-header-cell ${isTdy ? 'cal-today' : ''}`}>
@@ -136,7 +133,7 @@ export default function WeeklyCalendar() {
 
           {/* Day columns */}
           {Array.from({ length: 7 }, (_, dow) => {
-            const colDate = fmtDate(addDays(monday, dow));
+            const colDate = localISODate(addDays(monday, dow));
 
             // Claimed shift blocks for this dow
             const shiftEvents = state.shiftBlocks

@@ -18,14 +18,17 @@ export default function MyShifts() {
     });
   };
 
-  const unclaim = (shiftId: string) => {
-    dispatch({ type: 'UNCLAIM_SHIFT', payload: shiftId });
+  const unclaim = async (shiftId: string) => {
+    const shift = state.shiftBlocks.find(s => s.id === shiftId);
+    const res = await dispatch({ type: 'UNCLAIM_SHIFT', payload: shiftId });
+    if (!res.ok) return; // the error banner shows why
 
-    // Notify admins and members
+    // Notify admins and members (the icon comes from the type, so no emoji in the text)
+    const when = shift ? ` (${DAY_NAMES[shift.dayOfWeek]} ${shift.startTime}–${shift.endTime})` : '';
     const notif: Notification = {
       id: `n-${Date.now()}`,
       userId: 'all',
-      message: `⚠️ ${currentUser.name} cancelled a shift. Opening hours may have changed.`,
+      message: `${currentUser.name} cancelled a shift${when}. Opening hours may have changed.`,
       type: 'alert',
       read: false,
       createdAt: new Date().toISOString(),

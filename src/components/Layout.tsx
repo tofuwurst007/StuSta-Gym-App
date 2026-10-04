@@ -95,7 +95,7 @@ const Icon = {
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { currentUser, logout, updateCurrentUser } = useAuth();
-  const { state } = useApp();
+  const { state, syncError, clearSyncError } = useApp();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen]         = useState(false);
@@ -241,7 +241,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {showAvatarPicker && currentUser && (
         <AvatarPicker
           current={currentUser.avatarId}
-          onSelect={id => updateCurrentUser({ avatarId: id })}
+          onSelect={id => updateCurrentUser({ avatarId: id })
+            .catch(err => window.alert(`Couldn't save your avatar: ${err instanceof Error ? err.message : err}`))}
           onClose={() => setShowAvatarPicker(false)}
         />
       )}
@@ -307,7 +308,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         <main className="main-content">
-          <div className="main-content-inner page-enter">{children}</div>
+          <div className="main-content-inner page-enter">
+            {syncError && (
+              <div className="sync-error" role="alert">
+                <span>{syncError}</span>
+                <button className="sync-error-close" onClick={clearSyncError} aria-label="Dismiss">✕</button>
+              </div>
+            )}
+            {children}
+          </div>
         </main>
       </div>
     </div>

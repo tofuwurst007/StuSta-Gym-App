@@ -29,6 +29,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
+  resendVerification: (email: string) => Promise<void>;
   updateCurrentUser: (updates: Partial<User>) => Promise<void>;
 }
 
@@ -64,8 +65,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadProfile = useCallback(async (s: Session) => {
     const uid = s.user.id;
 
-    // Skip if we already loaded for this user
-    if (lastProfileFor.current === uid && currentUser) {
+    // Skip if we already loaded for this user (token refreshes emit new session objects)
+    if (lastProfileFor.current === uid) {
       console.log('[Auth] profile already loaded for', s.user.email);
       setReady(true);
       return;
@@ -135,8 +136,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // 3) Fallback — use session data with member role
+      // 3) No profile at all. If the account itself is gone (deleted by an admin while
+      //    this device was still logged in), end the session instead of faking a member.
+      const { error: userErr } = await supabase.auth.getUser();
+      if (userErr && [401, 403, 404].includes(userErr.status ?? 0)) {
+        console.warn('[Auth] account no longer exists — signing out');
+        await supabase.auth.signOut({ scope: 'local' });
+        return;
+      }
+
+      // Fallback — use session data with member role. Mark as done so this
+      // isn't retried on every render (it used to loop endlessly).
       console.warn('[Auth] all DB attempts failed — using session fallback (member role)');
+      lastProfileFor.current = uid;
       const name2 = s.user.user_metadata?.name ?? s.user.email?.split('@')[0] ?? 'User';
       setCurrentUser({
         id: uid, name: name2, email: s.user.email ?? '', role: 'member',
@@ -147,10 +159,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       setReady(true);
     } catch (err) {
+      // Not marked as loaded: the next session event (e.g. token refresh) retries
       console.error('[Auth] loadProfile crashed:', err);
       setReady(true);
     }
-  }, [currentUser]);
+  }, []);
 
   useEffect(() => {
     if (!sessionReady) return;
@@ -170,7 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw new Error(error.message);
+      if (error) throw error; // AuthError keeps .status (e.g. 429) for Login's messages
       // onAuthStateChange → setSession → useEffect → loadProfile
     } finally {
       setLoading(false);
@@ -181,7 +194,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signUp({
-        email, password, options: { data: { name } },
+        email, password,
+        // The verification link lands on /auth/callback, which confirms and logs the user in
+        options: { data: { name }, emailRedirectTo: `${window.location.origin}/auth/callback` },
       });
       if (error) throw new Error(error.message);
       if (data.user && (data.user.identities?.length ?? 0) === 0) {
@@ -192,6 +207,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function resendVerification(email: string): Promise<void> {
+    const { error } = await supabase.auth.resend({
+      type: 'signup', email,
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (error) throw error;
+  }
+
   async function logout(): Promise<void> {
     // flushSync forces React to apply the state update synchronously,
     // so the UI reflects currentUser=null before we navigate away.
@@ -200,7 +223,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setCurrentUser(null);
       setSession(null);
     });
-    await supabase.auth.signOut();
+    // If the server can't be reached, still drop the local session so a reload
+    // doesn't silently log the user back in (matters on shared devices).
+    // signOut() bails out on network errors before clearing storage, and can hang for a
+    // minute when the server doesn't answer — so give it 3 s, then remove it directly.
+    const { error } = await Promise.race([
+      supabase.auth.signOut(),
+      new Promise<{ error: Error }>(resolve => setTimeout(() => resolve({ error: new Error('sign-out timed out') }), 3000)),
+    ]);
+    if (error) {
+      const storageKey = (supabase.auth as unknown as { storageKey: string }).storageKey;
+      localStorage.removeItem(storageKey);
+      localStorage.removeItem(`${storageKey}-code-verifier`);
+    }
   }
 
   async function updateCurrentUser(updates: Partial<User>): Promise<void> {
@@ -209,7 +244,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (updates.name) mapped.name = updates.name;
     if (updates.avatarId) mapped.avatar_id = updates.avatarId;
     if (updates.avatarInitials) mapped.avatar_initials = updates.avatarInitials;
-    if (updates.role) mapped.role = updates.role;
+    // Role changes go through the admin user management, never through one's own profile
 
     const { error } = await supabase.from('profiles').update(mapped).eq('id', currentUser.id);
     if (error) throw new Error(error.message);
@@ -217,7 +252,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ currentUser, loading, ready, login, signUp, logout, updateCurrentUser }}>
+    <AuthContext.Provider value={{ currentUser, loading, ready, login, signUp, resendVerification, logout, updateCurrentUser }}>
       {children}
     </AuthContext.Provider>
   );

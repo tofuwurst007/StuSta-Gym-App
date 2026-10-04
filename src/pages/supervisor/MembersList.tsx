@@ -45,6 +45,8 @@ export default function MembersList() {
         {members.length === 0 && <div className="empty-state">No members found</div>}
         {members.map(user => {
           const isSelf = user.id === currentUser?.id;
+          // Only admins may edit admin profiles (enforced by the database too)
+          const canEdit = !isSelf && (user.role !== 'admin' || currentUser?.role === 'admin');
           return (
             <div key={user.id} className="member-list-card">
               <AvatarDisplay avatarId={user.avatarId} initials={user.avatarInitials} size={40} />
@@ -56,7 +58,7 @@ export default function MembersList() {
                 <div className="member-list-email">{user.email}</div>
               </div>
               <span className={`role-badge role-${user.role}`}>{user.role}</span>
-              {!isSelf && (
+              {canEdit && (
                 <button
                   className="admin-action-btn edit"
                   onClick={() => navigate(`/members/${user.id}`)}
