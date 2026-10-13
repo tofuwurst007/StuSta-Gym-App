@@ -30,7 +30,7 @@ echo "[1/7] Uploading source, migrations and server config..."
 # .env* stay on the VM (they hold the production URL/key); src/public are replaced
 # completely so deleted files (e.g. the Klaro consent banner) are gone there too.
 FILES=(src index.html package.json package-lock.json tsconfig.json vite.config.ts
-       server/Caddyfile server/backup.sh "${MIGRATIONS[@]}")
+       server/Caddyfile server/backup.sh server/docker-compose.override.yml "${MIGRATIONS[@]}")
 [ -d public ] && FILES+=(public)   # optional: only static assets, may not exist
 tar czf - "${FILES[@]}" \
   | ssh gym "mkdir -p /tmp/gym-deploy && rm -rf /tmp/gym-deploy/* && tar xzf - -C /tmp/gym-deploy"
@@ -82,6 +82,9 @@ echo "[6/7] Server config (backup script, Caddy)..."
 # Backup script: the old one left empty dumps when pg_dump failed (cron runs it at 03:00)
 cp "$APP/deploy/production/backup.sh" "$APP/deploy/production/backup.sh.bak.$STAMP"
 install -m 755 "$NEW/server/backup.sh" "$APP/deploy/production/backup.sh"
+# Which Supabase services run (unused ones are off); takes effect on the next compose up
+install -m 644 "$NEW/server/docker-compose.override.yml" \
+  "$APP/deploy/production/supabase-docker/docker/docker-compose.override.yml"
 echo "       backup.sh updated"
 
 cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak.$STAMP

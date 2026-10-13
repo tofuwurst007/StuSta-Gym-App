@@ -70,13 +70,20 @@ export default function PrivacyPolicy() {
         <section className="privacy-section">
           <h2>4. Speicherdauer (Data retention)</h2>
           <ul>
-            <li>Kontodaten: Für die Dauer der Mitgliedschaft + 1 Jahr.</li>
+            <li>
+              Kontodaten: Für die Dauer der Mitgliedschaft + 1 Jahr. Konten ohne eingetragene
+              Mitgliedschaft werden 1 Jahr nach der letzten Anmeldung gelöscht.
+            </li>
+            <li>Nicht bestätigte Registrierungen: 7 Tage.</li>
             <li>Anwesenheitsprotokolle: 6 Monate.</li>
             <li>Benachrichtigungen: 90 Tage.</li>
+            <li>Änderungsprotokoll der Mitgliedsdaten und Feedback-Meldungen: 1 Jahr.</li>
+            <li>Datensicherungen (Backups): 30 Tage.</li>
           </ul>
           <p style={{ marginTop: 8, fontSize: 13, color: 'var(--text2)' }}>
-            Nach Ablauf dieser Fristen werden die Daten automatisch gelöscht, sofern keine
-            gesetzlichen Aufbewahrungspflichten entgegenstehen.
+            Nach Ablauf dieser Fristen werden die Daten einmal täglich automatisch gelöscht,
+            sofern keine gesetzlichen Aufbewahrungspflichten entgegenstehen. Konten von
+            Supervisoren und Admins werden von der Verwaltung gepflegt und nicht automatisch gelöscht.
           </p>
         </section>
 

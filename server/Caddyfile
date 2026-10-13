@@ -22,7 +22,8 @@
 
     # --- Supabase API → Kong (only the public API prefixes) -----------------
     # reverse_proxy handles websocket upgrades (realtime) on its own.
-    @api path /auth/v1/* /rest/v1/* /realtime/v1/* /storage/v1/* /graphql/v1 /graphql/v1/*
+    # (no /storage/v1: file storage is switched off, see docker-compose.override.yml)
+    @api path /auth/v1/* /rest/v1/* /realtime/v1/* /graphql/v1 /graphql/v1/*
     handle @api {
         reverse_proxy localhost:8000
     }

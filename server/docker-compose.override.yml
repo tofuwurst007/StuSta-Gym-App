@@ -1,0 +1,24 @@
+# =============================================================================
+# StuSta Gym — Supabase services the app doesn't use are switched off
+# =============================================================================
+# Installed next to docker-compose.yml (deploy/production/supabase-docker/docker/)
+# by scripts/deploy-to-vm.sh; Docker Compose loads it automatically.
+#
+# The app only needs: db, auth, rest, realtime, kong (+ studio/meta as admin UI).
+# Switching the rest off frees ~5 GB of disk and a good part of the VM's 3 GB RAM.
+#
+# Re-enable one if ever needed:
+#   docker compose --profile unused up -d <service>
+# =============================================================================
+services:
+  analytics: { profiles: [unused] }   # Logflare — log UI for Studio
+  vector:    { profiles: [unused] }   # log shipping to Logflare
+  supavisor: { profiles: [unused] }   # connection pooler for external DB clients
+  storage:   { profiles: [unused] }   # file storage — the app stores no files
+  imgproxy:  { profiles: [unused] }   # image transforms for storage
+  functions: { profiles: [unused] }   # edge functions — none exist
+
+  # Studio waited for analytics to become healthy; it works without it
+  # (only its log viewer stays empty).
+  studio:
+    depends_on: !reset {}
