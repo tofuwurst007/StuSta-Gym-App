@@ -13,9 +13,9 @@ export function getOpeningHoursForDay(
 ): OpeningSlot[] {
   const slots: OpeningSlot[] = [];
 
-  // Claimed shifts for this day
+  // Claimed shifts for this day (label = supervisor name, only known to staff)
   shiftBlocks
-    .filter(s => s.dayOfWeek === dayOfWeek && s.supervisorId)
+    .filter(s => s.dayOfWeek === dayOfWeek && s.claimed)
     .forEach(s => {
       slots.push({ start: s.startTime, end: s.endTime, source: 'shift', label: s.supervisorName ?? '' });
     });

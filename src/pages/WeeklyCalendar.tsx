@@ -136,26 +136,27 @@ export default function WeeklyCalendar() {
             const colDate = localISODate(addDays(monday, dow));
 
             // Claimed shift blocks for this dow
+            // (supervisor names are only loaded for staff; members just see "Gym Open")
             const shiftEvents = state.shiftBlocks
-              .filter(s => s.dayOfWeek === dow && s.supervisorId)
+              .filter(s => s.dayOfWeek === dow && s.claimed)
               .map(s => ({
                 id: s.id,
                 start: s.startTime,
                 end:   s.endTime,
-                label: s.supervisorName ?? '',
+                label: s.supervisorName || 'Gym Open',
                 type: 'shift' as const,
                 gcLink: googleCalendarLink(
                   `🏋️ Gym Open`,
                   colDate,
                   s.startTime,
                   s.endTime,
-                  `Supervisor: ${s.supervisorName}`,
+                  s.supervisorName ? `Supervisor: ${s.supervisorName}` : '',
                 ),
               }));
 
             // Free (unclaimed) blocks for this dow
             const freeEvents = state.shiftBlocks
-              .filter(s => s.dayOfWeek === dow && !s.supervisorId)
+              .filter(s => s.dayOfWeek === dow && !s.claimed)
               .map(s => ({
                 id: s.id + '-free',
                 start: s.startTime,
@@ -172,7 +173,7 @@ export default function WeeklyCalendar() {
                 id: sp.id,
                 start: sp.startTime,
                 end:   sp.endTime,
-                label: sp.supervisorName,
+                label: sp.supervisorName || 'Extra Session',
                 type: 'open' as const,
                 gcLink: googleCalendarLink(
                   `⚡ Extra Session`,

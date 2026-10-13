@@ -37,7 +37,8 @@ export default function SpontaneousOpen() {
     const notif: Notification = {
       id: `n-${Date.now()}`,
       userId: 'all',
-      message: `Extra session on ${form.date}: ${form.startTime}–${form.endTime} by ${currentUser.name}.`,
+      // No supervisor name: members must not learn who covers which session
+      message: `Extra session on ${form.date}: ${form.startTime}–${form.endTime}.`,
       type: 'info',
       read: false,
       createdAt: new Date().toISOString(),
@@ -54,7 +55,7 @@ export default function SpontaneousOpen() {
     const notif: Notification = {
       id: `n-${Date.now()}`,
       userId: 'all',
-      message: `The extra session${when} was cancelled by ${currentUser.name}.`,
+      message: `The extra session${when} was cancelled.`,
       type: 'warning',
       read: false,
       createdAt: new Date().toISOString(),

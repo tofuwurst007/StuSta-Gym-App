@@ -51,12 +51,12 @@ function reducer(state: AppState, action: Action): AppState {
     case 'CLAIM_SHIFT':
       return { ...state, shiftBlocks: state.shiftBlocks.map(s =>
         s.id === action.payload.shiftId
-          ? { ...s, supervisorId: action.payload.supervisorId, supervisorName: action.payload.supervisorName }
+          ? { ...s, claimed: true, supervisorId: action.payload.supervisorId, supervisorName: action.payload.supervisorName }
           : s
       )};
     case 'UNCLAIM_SHIFT':
       return { ...state, shiftBlocks: state.shiftBlocks.map(s =>
-        s.id === action.payload ? { ...s, supervisorId: undefined, supervisorName: undefined } : s
+        s.id === action.payload ? { ...s, claimed: false, supervisorId: undefined, supervisorName: undefined } : s
       )};
     case 'UPDATE_SHIFT':       return { ...state, shiftBlocks: state.shiftBlocks.map(s => s.id === action.payload.id ? action.payload : s) };
     case 'ADD_SHIFT':          return { ...state, shiftBlocks: [...state.shiftBlocks, action.payload] };
@@ -90,20 +90,29 @@ function toUser(r: any): User {
     avatarId: r.avatar_id ?? undefined,
   };
 }
+// Who covers which shift/opening. Only filled for supervisors/admins (staff_assignments());
+// members and guests can't read those columns at all.
+type Assignment = { supervisor_id: string | null; supervisor_name: string | null };
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toShift(r: any): ShiftBlock {
+function toShift(r: any, who?: Assignment): ShiftBlock {
   return {
     id: r.id, dayOfWeek: r.day_of_week, startTime: r.start_time, endTime: r.end_time,
-    supervisorId: r.supervisor_id || undefined, supervisorName: r.supervisor_name || undefined,
+    claimed: !!r.is_claimed,
+    supervisorId: who?.supervisor_id || undefined, supervisorName: who?.supervisor_name || undefined,
   };
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toSpont(r: any): SpontaneousOpening {
+function toSpont(r: any, who?: Assignment): SpontaneousOpening {
   return {
-    id: r.id, supervisorId: r.supervisor_id ?? '', supervisorName: r.supervisor_name || r.trainer || '',
+    id: r.id, supervisorId: who?.supervisor_id ?? '', supervisorName: who?.supervisor_name ?? '',
     date: r.date, startTime: r.start_time, endTime: r.end_time, note: r.note || undefined,
   };
 }
+
+// Public columns only — select('*') would be rejected, the supervisor columns aren't readable
+const SHIFT_COLUMNS = 'id,day_of_week,start_time,end_time,is_claimed';
+const SPONT_COLUMNS = 'id,date,start_time,end_time,note';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toNotif(r: any, readBroadcasts: Set<string>): Notification {
   const broadcast = r.user_id == null;
@@ -162,6 +171,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [syncError, setSyncError] = useState<string | null>(null);
   const { currentUser } = useAuth();
   const userId = currentUser?.id ?? null;
+  const isStaff = currentUser?.role === 'supervisor' || currentUser?.role === 'admin';
 
   // Latest state for dispatch, which needs pre-update values (e.g. which notifications were unread)
   const stateRef = useRef(state);
@@ -170,15 +180,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const refetch = useCallback(async () => {
     try {
-      const [users, shifts, sponts, notifs, logs, reads] = await Promise.all([
+      const [users, shifts, sponts, notifs, logs, reads, assignments] = await Promise.all([
         supabase.from('profiles').select('*').order('name'),
-        supabase.from('shift_blocks').select('*').order('day_of_week').order('start_time'),
-        supabase.from('spontaneous_openings').select('*').order('date', { ascending: false }),
+        supabase.from('shift_blocks').select(SHIFT_COLUMNS).order('day_of_week').order('start_time'),
+        supabase.from('spontaneous_openings').select(SPONT_COLUMNS).order('date', { ascending: false }),
         supabase.from('notifications').select('*').order('created_at', { ascending: false }),
         supabase.from('attendance_logs').select('*').order('check_in', { ascending: false }),
         userId
           ? supabase.from('notification_reads').select('notification_id').eq('user_id', userId)
           : Promise.resolve({ data: [] as { notification_id: string }[], error: null }),
+        isStaff
+          ? supabase.rpc('staff_assignments')
+          : Promise.resolve({ data: [] as (Assignment & { kind: string; id: string })[], error: null }),
       ]);
 
       // The schedule is what everyone needs; without it there's nothing meaningful to show
@@ -187,18 +200,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setLoadError(true);
         return;
       }
-      for (const res of [users, sponts, notifs, logs, reads]) {
+      for (const res of [users, sponts, notifs, logs, reads, assignments]) {
         if (res.error) console.warn('[AppContext] partial fetch error:', res.error.message);
       }
 
       const readBroadcasts = new Set((reads.data ?? []).map(r => r.notification_id));
+      const shiftWho = new Map<string, Assignment>();
+      const spontWho = new Map<string, Assignment>();
+      for (const a of (assignments.data ?? []) as (Assignment & { kind: string; id: string })[]) {
+        (a.kind === 'shift' ? shiftWho : spontWho).set(a.id, a);
+      }
       setLoadError(false);
       dispatch({
         type: 'SET_STATE',
         payload: {
           users:               (users.data  ?? []).map(toUser),
-          shiftBlocks:         (shifts.data ?? []).map(toShift),
-          spontaneousOpenings: (sponts.data ?? []).map(toSpont),
+          shiftBlocks:         (shifts.data ?? []).map(r => toShift(r, shiftWho.get(r.id))),
+          spontaneousOpenings: (sponts.data ?? []).map(r => toSpont(r, spontWho.get(r.id))),
           notifications:       (notifs.data ?? []).map(r => toNotif(r, readBroadcasts)),
           attendanceLogs:      (logs.data   ?? []).map(toAttendance),
         },
@@ -209,7 +227,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, isStaff]);
 
   // Runs on mount and again whenever the logged-in user changes
   useEffect(() => { refetch(); }, [refetch]);

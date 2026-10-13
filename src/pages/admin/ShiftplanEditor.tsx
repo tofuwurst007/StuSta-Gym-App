@@ -29,6 +29,7 @@ export default function ShiftplanEditor() {
       dayOfWeek: selectedDay,
       startTime: form.startTime,
       endTime: form.endTime,
+      claimed: false,
     };
     dispatch({ type: 'ADD_SHIFT', payload: shift });
     setForm({ startTime: '', endTime: '' });
@@ -48,8 +49,9 @@ export default function ShiftplanEditor() {
     const notif: Notification = {
       id: `n-${Date.now()}`,
       userId: 'all',
-      message: `The shift ${DAY_NAMES[shift.dayOfWeek]} ${shift.startTime}–${shift.endTime}` +
-        `${shift.supervisorName ? ` (${shift.supervisorName})` : ''} was unassigned. Opening hours may have changed.`,
+      // No supervisor name: members must not learn who covered which shift
+      message: `The shift ${DAY_NAMES[shift.dayOfWeek]} ${shift.startTime}–${shift.endTime} ` +
+        'is no longer covered. Opening hours may have changed.',
       type: 'alert',
       read: false,
       createdAt: new Date().toISOString(),
@@ -108,15 +110,15 @@ export default function ShiftplanEditor() {
           <p className="empty-state">No shift blocks defined for {DAY_NAMES[selectedDay]}.</p>
         ) : (
           dayShifts.map(s => (
-            <div key={s.id} className={`shift-row ${s.supervisorId ? 'shift-claimed' : 'shift-unclaimed'}`}>
+            <div key={s.id} className={`shift-row ${s.claimed ? 'shift-claimed' : 'shift-unclaimed'}`}>
               <span className="shift-time">{s.startTime} – {s.endTime}</span>
-              {s.supervisorId ? (
-                <span className="shift-supervisor">{s.supervisorName}</span>
+              {s.claimed ? (
+                <span className="shift-supervisor">{s.supervisorName || 'Claimed'}</span>
               ) : (
                 <span className="shift-unclaimed-label">Unclaimed</span>
               )}
               <div className="shift-actions">
-                {s.supervisorId && (
+                {s.claimed && (
                   <button className="btn-ghost-sm" onClick={() => unassign(s.id)}>Unassign</button>
                 )}
                 <button className="btn-danger-sm" onClick={() => deleteShift(s.id)}>Delete</button>

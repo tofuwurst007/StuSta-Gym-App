@@ -59,7 +59,7 @@ export default function Home() {
             {todaySlots.map((slot, i) => (
               <div key={i} className={`slot-item ${slot.source === 'spontaneous' ? 'slot-spontaneous' : ''}`}>
                 <span className="slot-time">{slot.start} – {slot.end}</span>
-                <span className="slot-supervisor">{slot.label}</span>
+                {slot.label && <span className="slot-supervisor">{slot.label}</span>}
                 {slot.source === 'spontaneous' && <span className="slot-tag">Spontaneous</span>}
               </div>
             ))}
@@ -97,7 +97,7 @@ export default function Home() {
           {state.spontaneousOpenings.filter(sp => sp.date === today).map(sp => (
             <div key={sp.id} className="info-card">
               <p className="info-time">🕐 {sp.startTime} – {sp.endTime}</p>
-              <p className="info-name">{sp.supervisorName}</p>
+              {sp.supervisorName && <p className="info-name">{sp.supervisorName}</p>}
               {sp.note && <p className="info-note">{sp.note}</p>}
             </div>
           ))}

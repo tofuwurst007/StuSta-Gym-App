@@ -20,13 +20,14 @@ export interface ShiftBlock {
   dayOfWeek: number;   // 0 = Monday … 6 = Sunday
   startTime: string;   // HH:mm
   endTime: string;     // HH:mm
-  supervisorId?: string;
+  claimed: boolean;    // covered by a supervisor (visible to everyone)
+  supervisorId?: string;   // who covers it — only loaded for supervisors/admins
   supervisorName?: string;
 }
 
 export interface SpontaneousOpening {
   id: string;
-  supervisorId: string;
+  supervisorId: string;    // empty for members/guests — only staff learn who opens
   supervisorName: string;
   date: string;        // YYYY-MM-DD
   startTime: string;

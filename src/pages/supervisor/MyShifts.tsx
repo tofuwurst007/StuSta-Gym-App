@@ -9,7 +9,7 @@ export default function MyShifts() {
   if (!currentUser) return null;
 
   const myShifts = state.shiftBlocks.filter(s => s.supervisorId === currentUser.id);
-  const availableShifts = state.shiftBlocks.filter(s => !s.supervisorId);
+  const availableShifts = state.shiftBlocks.filter(s => !s.claimed);
 
   const claim = (shiftId: string) => {
     dispatch({
@@ -23,12 +23,12 @@ export default function MyShifts() {
     const res = await dispatch({ type: 'UNCLAIM_SHIFT', payload: shiftId });
     if (!res.ok) return; // the error banner shows why
 
-    // Notify admins and members (the icon comes from the type, so no emoji in the text)
+    // Notify everyone — without the supervisor's name: members must not learn who covers which shift
     const when = shift ? ` (${DAY_NAMES[shift.dayOfWeek]} ${shift.startTime}–${shift.endTime})` : '';
     const notif: Notification = {
       id: `n-${Date.now()}`,
       userId: 'all',
-      message: `${currentUser.name} cancelled a shift${when}. Opening hours may have changed.`,
+      message: `A shift was cancelled${when}. Opening hours may have changed.`,
       type: 'alert',
       read: false,
       createdAt: new Date().toISOString(),

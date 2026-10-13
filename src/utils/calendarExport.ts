@@ -89,9 +89,10 @@ export function exportShiftsICS(shiftBlocks: ShiftBlock[]): void {
     ...VTIMEZONE_BERLIN,
   ];
 
-  for (const shift of shiftBlocks.filter(s => s.supervisorId)) {
+  for (const shift of shiftBlocks.filter(s => s.claimed)) {
     const baseDate = nextWeekdayDate(shift.dayOfWeek);
-    const supervisor = shift.supervisorName || 'Supervisor';
+    // Names are only loaded for staff; members export the plain schedule
+    const by = shift.supervisorName ? ` — ${shift.supervisorName}` : '';
     lines.push(
       'BEGIN:VEVENT',
       `UID:shift-${shift.id}@stusta-gym`,
@@ -99,8 +100,8 @@ export function exportShiftsICS(shiftBlocks: ShiftBlock[]): void {
       `DTSTART;TZID=Europe/Berlin:${icsDate(baseDate, shift.startTime)}`,
       `DTEND;TZID=Europe/Berlin:${icsDate(baseDate, shift.endTime)}`,
       `RRULE:FREQ=WEEKLY;BYDAY=${RRULE_DAYS[shift.dayOfWeek]}`,
-      `SUMMARY:${esc(`🏋️ Gym Open — ${supervisor}`)}`,
-      `DESCRIPTION:${esc(`Supervised by ${supervisor} (${DAY_NAMES[shift.dayOfWeek]} ${shift.startTime}–${shift.endTime})`)}`,
+      `SUMMARY:${esc(`🏋️ Gym Open${by}`)}`,
+      `DESCRIPTION:${esc(`Supervised gym session${by ? ` by ${shift.supervisorName}` : ''} (${DAY_NAMES[shift.dayOfWeek]} ${shift.startTime}–${shift.endTime})`)}`,
       'CATEGORIES:StuSta Gym',
       'END:VEVENT',
     );
@@ -124,15 +125,15 @@ export function exportSpontaneousICS(openings: SpontaneousOpening[]): void {
   ];
 
   for (const sp of openings) {
-    const supervisor = sp.supervisorName || 'Supervisor';
+    const by = sp.supervisorName ? ` — ${sp.supervisorName}` : '';
     lines.push(
       'BEGIN:VEVENT',
       `UID:spontaneous-${sp.id}@stusta-gym`,
       `DTSTAMP:${stamp}`,
       `DTSTART;TZID=Europe/Berlin:${icsDate(sp.date, sp.startTime)}`,
       `DTEND;TZID=Europe/Berlin:${icsDate(sp.date, sp.endTime)}`,
-      `SUMMARY:${esc(`⚡ Gym Extra Session — ${supervisor}`)}`,
-      `DESCRIPTION:${esc(sp.note || `Spontaneous opening by ${supervisor}`)}`,
+      `SUMMARY:${esc(`⚡ Gym Extra Session${by}`)}`,
+      `DESCRIPTION:${esc(sp.note || 'Spontaneous opening')}`,
       'END:VEVENT',
     );
   }
