@@ -7,6 +7,7 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import AuthCallback from './pages/AuthCallback';
+import ResetPassword from './pages/ResetPassword';
 import Home from './pages/Home';
 import MyCard from './pages/MyCard';
 import Notifications from './pages/Notifications';
@@ -86,6 +87,8 @@ function AppRoutes() {
       <Route path="/privacy" element={<PrivacyPolicy />} />
       {/* Auth callback — handles email verification redirect from Supabase */}
       <Route path="/auth/callback" element={<AuthCallback />} />
+      {/* Password reset — public: the link from the email signs the user in on arrival */}
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* Guest-accessible pages (visible to everyone, read-only for guests) */}
       <Route path="/"        element={<ProtectedRoute requireAuth={false}><Home /></ProtectedRoute>} />

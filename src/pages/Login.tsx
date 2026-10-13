@@ -144,6 +144,13 @@ export default function Login() {
             />
           </div>
 
+          {mode === 'signin' && (
+            // Email goes along as router state so it never lands in the URL
+            <NavLink to="/reset-password" state={{ email }} className="login-forgot">
+              Forgot password?
+            </NavLink>
+          )}
+
           {mode === 'signup' && (
             <div className="login-field">
               <label htmlFor="login-confirm">Confirm password</label>

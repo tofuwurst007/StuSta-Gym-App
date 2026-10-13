@@ -30,6 +30,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
   resendVerification: (email: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
   updateCurrentUser: (updates: Partial<User>) => Promise<void>;
 }
 
@@ -215,6 +217,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   }
 
+  async function requestPasswordReset(email: string): Promise<void> {
+    // GoTrue answers the same whether or not the account exists (no account enumeration)
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) throw error;
+  }
+
+  async function updatePassword(password: string): Promise<void> {
+    // Works with the session the reset link creates (and for any logged-in user)
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+  }
+
   async function logout(): Promise<void> {
     // flushSync forces React to apply the state update synchronously,
     // so the UI reflects currentUser=null before we navigate away.
@@ -252,7 +268,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ currentUser, loading, ready, login, signUp, resendVerification, logout, updateCurrentUser }}>
+    <AuthContext.Provider value={{ currentUser, loading, ready, login, signUp, resendVerification, requestPasswordReset, updatePassword, logout, updateCurrentUser }}>
       {children}
     </AuthContext.Provider>
   );

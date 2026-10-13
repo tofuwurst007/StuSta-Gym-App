@@ -701,6 +701,17 @@ body {
 .status-expired { background: var(--red-dim); color: var(--red); }
 .card-note { font-size: 12px; color: var(--text3); max-width: 400px; line-height: 1.5; }
 
+/* ── "Forgot password?" link on the login form ────── */
+.login-forgot {
+  align-self: flex-end;
+  margin-top: -6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+.login-forgot:hover { text-decoration: underline; }
+
 /* ── Sync error banner (failed saves) ─────────────── */
 .sync-error {
   display: flex;
