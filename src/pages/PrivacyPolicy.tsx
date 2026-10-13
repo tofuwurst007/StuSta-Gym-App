@@ -71,8 +71,9 @@ export default function PrivacyPolicy() {
           <h2>4. Speicherdauer (Data retention)</h2>
           <ul>
             <li>
-              Kontodaten: Für die Dauer der Mitgliedschaft + 1 Jahr. Konten ohne eingetragene
-              Mitgliedschaft werden 1 Jahr nach der letzten Anmeldung gelöscht.
+              Kontodaten: Solange das Konto besteht – auch nach Ende der Mitgliedschaft. Auf
+              Wunsch löschen wir das Konto jederzeit (siehe Abschnitt 6). Konten ohne
+              eingetragene Mitgliedschaft werden 1 Jahr nach der letzten Anmeldung gelöscht.
             </li>
             <li>Nicht bestätigte Registrierungen: 7 Tage.</li>
             <li>Anwesenheitsprotokolle: 6 Monate.</li>
