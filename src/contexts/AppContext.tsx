@@ -10,7 +10,7 @@
  *  - Realtime subscriptions keep state fresh when other users make changes.
  */
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
-import type { AppState, ShiftBlock, SpontaneousOpening, User, Notification, AttendanceLog } from '../types';
+import type { AppState, ShiftBlock, SpontaneousOpening, User, Notification, AttendanceLog, Availability } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { localISODate } from '../utils/date';
@@ -32,23 +32,26 @@ type Action =
   | { type: 'ADD_NOTIFICATION'; payload: Notification }
   | { type: 'MARK_NOTIFICATION_READ'; payload: string }
   | { type: 'ADD_ATTENDANCE'; payload: AttendanceLog }
-  | { type: 'CHECKOUT_ATTENDANCE'; payload: { id: string; checkOut: string } };
+  | { type: 'CHECKOUT_ATTENDANCE'; payload: { id: string; checkOut: string } }
+  | { type: 'ASSIGN_SHIFT'; payload: { shiftId: string; supervisorId: string; supervisorName: string } }
+  | { type: 'UPSERT_AVAILABILITY'; payload: Availability };
 
 export type SyncResult = { ok: boolean; error?: string };
 
 const EMPTY_STATE: AppState = {
-  users: [], shiftBlocks: [], spontaneousOpenings: [], notifications: [], attendanceLogs: [],
+  users: [], shiftBlocks: [], spontaneousOpenings: [], notifications: [], attendanceLogs: [], availabilities: [],
 };
 
 // ─── Pure reducer ─────────────────────────────────────────────────────────────
 
-function reducer(state: AppState, action: Action): AppState {
+export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'SET_STATE':    return action.payload;
     case 'UPDATE_USER':  return { ...state, users: state.users.map(u => u.id === action.payload.id ? action.payload : u) };
     case 'DELETE_USER':  return { ...state, users: state.users.filter(u => u.id !== action.payload) };
     case 'ADD_USER':     return { ...state, users: [...state.users, action.payload] };
     case 'CLAIM_SHIFT':
+    case 'ASSIGN_SHIFT':
       return { ...state, shiftBlocks: state.shiftBlocks.map(s =>
         s.id === action.payload.shiftId
           ? { ...s, claimed: true, supervisorId: action.payload.supervisorId, supervisorName: action.payload.supervisorName }
@@ -72,6 +75,14 @@ function reducer(state: AppState, action: Action): AppState {
     case 'CHECKOUT_ATTENDANCE': return { ...state, attendanceLogs: state.attendanceLogs.map(a =>
       a.id === action.payload.id ? { ...a, checkOut: action.payload.checkOut } : a
     )};
+    case 'UPSERT_AVAILABILITY': {
+      const p = action.payload;
+      const same = (a: Availability) => a.supervisorId === p.supervisorId && a.weekStart === p.weekStart;
+      return { ...state, availabilities: state.availabilities.some(same)
+        ? state.availabilities.map(a => same(a) ? { ...p, id: a.id } : a)
+        : [...state.availabilities, p],
+      };
+    }
     default: return state;
   }
 }
@@ -122,6 +133,14 @@ function toNotif(r: any, readBroadcasts: Set<string>): Notification {
     // A broadcast row is shared by everyone, so its read state lives per user in notification_reads
     read: broadcast ? readBroadcasts.has(r.id) : !!r.read,
     createdAt: r.created_at ?? '',
+  };
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toAvailability(r: any): Availability {
+  return {
+    id: r.id, supervisorId: r.supervisor_id, supervisorName: r.supervisor_name ?? '',
+    weekStart: r.week_start, shiftBlockIds: r.shift_block_ids ?? [],
+    note: r.note || undefined, updatedAt: r.updated_at ?? '',
   };
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -180,7 +199,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const refetch = useCallback(async () => {
     try {
-      const [users, shifts, sponts, notifs, logs, reads, assignments] = await Promise.all([
+      const [users, shifts, sponts, notifs, logs, reads, assignments, avails] = await Promise.all([
         supabase.from('profiles').select('*').order('name'),
         supabase.from('shift_blocks').select(SHIFT_COLUMNS).order('day_of_week').order('start_time'),
         supabase.from('spontaneous_openings').select(SPONT_COLUMNS).order('date', { ascending: false }),
@@ -192,6 +211,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isStaff
           ? supabase.rpc('staff_assignments')
           : Promise.resolve({ data: [] as (Assignment & { kind: string; id: string })[], error: null }),
+        isStaff
+          ? supabase.from('availabilities').select('*').gte('week_start', localISODate(new Date(Date.now() - 21 * 864e5)))
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          : Promise.resolve({ data: [] as any[], error: null }),
       ]);
 
       // The schedule is what everyone needs; without it there's nothing meaningful to show
@@ -200,7 +223,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setLoadError(true);
         return;
       }
-      for (const res of [users, sponts, notifs, logs, reads, assignments]) {
+      for (const res of [users, sponts, notifs, logs, reads, assignments, avails]) {
         if (res.error) console.warn('[AppContext] partial fetch error:', res.error.message);
       }
 
@@ -219,6 +242,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           spontaneousOpenings: (sponts.data ?? []).map(r => toSpont(r, spontWho.get(r.id))),
           notifications:       (notifs.data ?? []).map(r => toNotif(r, readBroadcasts)),
           attendanceLogs:      (logs.data   ?? []).map(toAttendance),
+          availabilities:      (avails.data ?? []).map(toAvailability),
         },
       });
     } catch (err) {
@@ -239,6 +263,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_blocks' }, () => refetch())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'spontaneous_openings' }, () => refetch())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => refetch())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'availabilities' }, () => refetch())
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -303,6 +328,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ({ error } = await supabase.rpc('claim_shift', { p_shift_id: shiftId, p_claim: action.type === 'CLAIM_SHIFT' }));
           break;
         }
+        case 'ASSIGN_SHIFT':
+          if (!isUuid(action.payload.shiftId)) { error = { message: STILL_SAVING }; break; }
+          ({ error } = await supabase.rpc('admin_assign_shift', {
+            p_shift_id: action.payload.shiftId, p_supervisor_id: action.payload.supervisorId,
+          }));
+          break;
+        case 'UPSERT_AVAILABILITY':
+          ({ error } = await supabase.from('availabilities').upsert({
+            supervisor_id: action.payload.supervisorId,
+            supervisor_name: action.payload.supervisorName,
+            week_start: action.payload.weekStart,
+            shift_block_ids: action.payload.shiftBlockIds.filter(isUuid),
+            note: action.payload.note ?? null,
+            updated_at: action.payload.updatedAt,
+          }, { onConflict: 'supervisor_id,week_start' }));
+          refetchAfter = true;
+          break;
         case 'ADD_SPONTANEOUS':
           ({ error } = await supabase.from('spontaneous_openings').insert({
             title: action.payload.note || 'Extra Session',

@@ -235,7 +235,6 @@ body {
   flex-shrink: 0;
   transition: transform var(--dur) var(--ease-spring);
 }
-.topbar-avatar:hover { transform: scale(1.08); }
 
 /* Hamburger */
 .menu-btn {

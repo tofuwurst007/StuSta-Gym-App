@@ -52,10 +52,21 @@ export interface AttendanceLog {
   checkOut?: string;
 }
 
+export interface Availability {
+  id: string;
+  supervisorId: string;
+  supervisorName: string;
+  weekStart: string;       // YYYY-MM-DD, always a Monday
+  shiftBlockIds: string[];
+  note?: string;
+  updatedAt: string;
+}
+
 export interface AppState {
   users: User[];
   shiftBlocks: ShiftBlock[];
   spontaneousOpenings: SpontaneousOpening[];
   notifications: Notification[];
   attendanceLogs: AttendanceLog[];
+  availabilities: Availability[];
 }

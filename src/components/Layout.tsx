@@ -3,7 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useApp } from '../contexts/AppContext';
 import { useTheme } from '../contexts/ThemeContext';
-import AvatarPicker, { AvatarDisplay } from './AvatarPicker';
+import { AvatarDisplay } from './AvatarPicker';
+import { getNextWeekStart, isAvailabilityDue } from '../utils/week';
 
 // ── Inline SVG icon set ───────────────────────────────────────────────────────
 const Icon = {
@@ -36,6 +37,20 @@ const Icon = {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="18" height="18" rx="2"/>
       <path d="M3 9h18M9 21V9"/>
+    </svg>
+  ),
+  availability: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2"/>
+      <path d="M16 2v4M8 2v4M3 10h18"/>
+      <path d="M9 16l2 2 4-4"/>
+    </svg>
+  ),
+  assign: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M17 11l2 2 4-4"/>
     </svg>
   ),
   bolt: (
@@ -94,12 +109,11 @@ const Icon = {
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { currentUser, logout, updateCurrentUser } = useAuth();
+  const { currentUser, logout } = useAuth();
   const { state, syncError, clearSyncError } = useApp();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
-  const [drawerOpen, setDrawerOpen]         = useState(false);
-  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const isGuest = !currentUser;
   const unread  = isGuest ? 0 : state.notifications.filter(
@@ -108,6 +122,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const isSup   = !isGuest && (currentUser!.role === 'supervisor' || currentUser!.role === 'admin');
   const isAdmin = !isGuest && currentUser!.role === 'admin';
+  const nextWeek = getNextWeekStart();
+  const availabilityMissing = currentUser?.role === 'supervisor' && isAvailabilityDue()
+    && !state.availabilities.some(a => a.supervisorId === currentUser.id && a.weekStart === nextWeek);
 
   const handleLogout = () => { logout(); navigate('/login'); };
   const closeDrawer  = () => setDrawerOpen(false);
@@ -165,6 +182,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="nav-icon">{Icon.shifts}</span>
             <span className="nav-text">My Shifts</span>
           </NavLink>
+          <NavLink to="/availability" onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
+            <span className="nav-icon">{Icon.availability}</span>
+            <span className="nav-text">Availability</span>
+            {availabilityMissing && <span className="nav-badge nav-badge-warn" title="Next week not submitted yet">!</span>}
+          </NavLink>
           <NavLink to="/spontaneous" onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
             <span className="nav-icon">{Icon.bolt}</span>
             <span className="nav-text">Spontaneous Open</span>
@@ -186,6 +208,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <NavLink to="/admin/shiftplan" onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
             <span className="nav-icon">{Icon.shiftplan}</span>
             <span className="nav-text">Shiftplan</span>
+          </NavLink>
+          <NavLink to="/admin/assign" onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
+            <span className="nav-icon">{Icon.assign}</span>
+            <span className="nav-text">Assign Shifts</span>
           </NavLink>
           <NavLink to="/admin/attendance" onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
             <span className="nav-icon">{Icon.attendance}</span>
@@ -214,15 +240,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       ) : (
         <div className="sidebar-user-card">
-          {/* Clickable avatar → opens picker */}
-          <button
-            className="sidebar-avatar sidebar-avatar-btn"
-            onClick={() => setShowAvatarPicker(true)}
-            title="Change avatar"
-            aria-label="Change avatar"
-          >
+          <div className="sidebar-avatar">
             <AvatarDisplay avatarId={currentUser!.avatarId} initials={currentUser!.avatarInitials} size={34} />
-          </button>
+          </div>
           <div className="sidebar-user-info">
             <p className="sidebar-name">{currentUser!.name}</p>
             <p className={`sidebar-role-tag role-${currentUser!.role}`}>{currentUser!.role}</p>
@@ -237,16 +257,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="app-shell">
-      {/* Avatar picker modal */}
-      {showAvatarPicker && currentUser && (
-        <AvatarPicker
-          current={currentUser.avatarId}
-          onSelect={id => updateCurrentUser({ avatarId: id })
-            .catch(err => window.alert(`Couldn't save your avatar: ${err instanceof Error ? err.message : err}`))}
-          onClose={() => setShowAvatarPicker(false)}
-        />
-      )}
-
       <header className="topbar">
         <div className="topbar-left">
           <button className="menu-btn" onClick={() => setDrawerOpen(true)} aria-label="Open menu">
@@ -273,16 +283,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               Sign in
             </button>
           ) : (
-            <button
-              className="topbar-avatar-wrap topbar-avatar-btn"
-              onClick={() => setShowAvatarPicker(true)}
-              aria-label="Change avatar"
-              title="Change avatar"
-            >
+            <div className="topbar-avatar-wrap">
               <div className="topbar-avatar">
                 <AvatarDisplay avatarId={currentUser!.avatarId} initials={currentUser!.avatarInitials} size={30} />
               </div>
-            </button>
+            </div>
           )}
         </div>
       </header>

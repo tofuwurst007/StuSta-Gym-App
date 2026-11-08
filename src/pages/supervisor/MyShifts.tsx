@@ -1,6 +1,8 @@
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { Link } from 'react-router-dom';
 import { DAY_NAMES } from '../../utils/openingHours';
+import { formatWeekRange, getNextWeekStart } from '../../utils/week';
 import type { Notification } from '../../types';
 
 export default function MyShifts() {
@@ -8,6 +10,9 @@ export default function MyShifts() {
   const { currentUser } = useAuth();
   if (!currentUser) return null;
 
+  const nextWeek = getNextWeekStart();
+  const hasNextWeekAvailability = state.availabilities.some(
+    a => a.supervisorId === currentUser.id && a.weekStart === nextWeek);
   const myShifts = state.shiftBlocks.filter(s => s.supervisorId === currentUser.id);
   const availableShifts = state.shiftBlocks.filter(s => !s.claimed);
 
@@ -50,6 +55,13 @@ export default function MyShifts() {
       <div className="page-header">
         <h2>My Shifts</h2>
       </div>
+
+      {currentUser.role === 'supervisor' && !hasNextWeekAvailability && (
+        <Link to="/availability" className="banner banner-warn banner-link">
+          <span className="banner-icon">📅</span>
+          <span>Enter your availability for next week ({formatWeekRange(nextWeek)}) →</span>
+        </Link>
+      )}
 
       {/* My claimed shifts */}
       <section className="section">

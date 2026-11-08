@@ -3,6 +3,14 @@ import { localISODate } from './date';
 
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+export const isWeekend = (dayOfWeek: number) => dayOfWeek >= 5;
+
+export function getMorningShift(dayOfWeek: number): { startTime: string; endTime: string } {
+  return isWeekend(dayOfWeek)
+    ? { startTime: '09:00', endTime: '11:00' }
+    : { startTime: '06:00', endTime: '08:00' };
+}
+
 export type OpeningSlot = { start: string; end: string; source: 'shift' | 'spontaneous'; label: string };
 
 export function getOpeningHoursForDay(

@@ -19,6 +19,8 @@ import ShiftplanEditor from './pages/admin/ShiftplanEditor';
 import AttendanceLogs from './pages/admin/AttendanceLogs';
 import EditMemberCard from './pages/admin/EditMemberCard';
 import MembersList from './pages/supervisor/MembersList';
+import Availability from './pages/supervisor/Availability';
+import AssignShifts from './pages/admin/AssignShifts';
 
 // ─── Route guard ──────────────────────────────────────────────────────────────
 // requireAuth:  redirect guests to /login (preserving the intended destination)
@@ -100,6 +102,7 @@ function AppRoutes() {
 
       {/* Supervisor + Admin */}
       <Route path="/shifts"      element={<ProtectedRoute requireRole="supervisor"><MyShifts /></ProtectedRoute>} />
+      <Route path="/availability" element={<ProtectedRoute requireRole="supervisor"><Availability /></ProtectedRoute>} />
       <Route path="/spontaneous" element={<ProtectedRoute requireRole="supervisor"><SpontaneousOpen /></ProtectedRoute>} />
       <Route path="/members"     element={<ProtectedRoute requireRole="supervisor"><MembersList /></ProtectedRoute>} />
       <Route path="/members/:userId" element={<ProtectedRoute requireRole="supervisor"><EditMemberCard /></ProtectedRoute>} />
@@ -107,6 +110,7 @@ function AppRoutes() {
       {/* Admin only */}
       <Route path="/admin/users"      element={<ProtectedRoute requireRole="admin"><UserManagement /></ProtectedRoute>} />
       <Route path="/admin/shiftplan"  element={<ProtectedRoute requireRole="admin"><ShiftplanEditor /></ProtectedRoute>} />
+      <Route path="/admin/assign"     element={<ProtectedRoute requireRole="admin"><AssignShifts /></ProtectedRoute>} />
       <Route path="/admin/attendance" element={<ProtectedRoute requireRole="admin"><AttendanceLogs /></ProtectedRoute>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
