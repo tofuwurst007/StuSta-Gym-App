@@ -4,6 +4,8 @@ import { DAY_NAMES } from '../../utils/openingHours';
 import { addWeeks, dateOfWeekDay, formatShortDate, formatWeekRange, getNextWeekStart, getWeekStart } from '../../utils/week';
 import { planAutoAssign, type ProposedAssignment } from '../../utils/autoAssign';
 import WeekSwitcher from '../../components/WeekSwitcher';
+import ExcelExportButton from '../../components/ExcelExportButton';
+import { plannableStaff } from '../../utils/excelExport';
 import type { Notification, ShiftBlock } from '../../types';
 
 const shortDay = (dow: number) => DAY_NAMES[dow].slice(0, 3);
@@ -16,12 +18,7 @@ export default function AssignShifts() {
 
   const weekAvail = state.availabilities.filter(a => a.weekStart === weekStart);
 
-  const supervisors = useMemo(() => {
-    const ids = new Set(weekAvail.map(a => a.supervisorId));
-    return state.users
-      .filter(u => u.role === 'supervisor' || ids.has(u.id))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [state.users, weekAvail]);
+  const supervisors = useMemo(() => plannableStaff(state.users, weekAvail), [state.users, weekAvail]);
 
   const submittedIds = new Set(weekAvail.map(a => a.supervisorId));
   const missing = supervisors.filter(s => !submittedIds.has(s.id));
@@ -151,6 +148,7 @@ export default function AssignShifts() {
             ✨ Auto-assign
           </button>
           <button className="btn-ghost-sm" onClick={notifyAssigned} disabled={covered === 0}>Notify supervisors</button>
+          <ExcelExportButton weekStart={weekStart} />
         </div>
       </div>
 

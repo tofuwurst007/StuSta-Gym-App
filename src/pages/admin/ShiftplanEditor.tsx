@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { DAY_NAMES, getMorningShift } from '../../utils/openingHours';
 import type { ShiftBlock, Notification } from '../../types';
+import ExcelExportButton from '../../components/ExcelExportButton';
+import { getNextWeekStart } from '../../utils/week';
 
 export default function ShiftplanEditor() {
   const { state, dispatch } = useApp();
@@ -83,6 +85,7 @@ export default function ShiftplanEditor() {
     <div className="page">
       <div className="page-header">
         <h2>Shiftplan Editor</h2>
+        <ExcelExportButton weekStart={getNextWeekStart()} label="⬇ Excel (next week)" />
       </div>
 
       {/* Day tabs */}
