@@ -20,8 +20,16 @@ export interface ShiftBlock {
   dayOfWeek: number;   // 0 = Monday … 6 = Sunday
   startTime: string;   // HH:mm
   endTime: string;     // HH:mm
-  claimed: boolean;    // covered by a supervisor (visible to everyone)
+  // Filled per week by blocksForWeek(); a block itself has no supervisor
+  claimed: boolean;    // covered in that week (visible to everyone)
   supervisorId?: string;   // who covers it — only loaded for supervisors/admins
+  supervisorName?: string;
+}
+
+export interface ShiftAssignment {
+  shiftBlockId: string;
+  weekStart: string;       // YYYY-MM-DD, Monday
+  supervisorId?: string;   // only loaded for supervisors/admins
   supervisorName?: string;
 }
 
@@ -69,4 +77,5 @@ export interface AppState {
   notifications: Notification[];
   attendanceLogs: AttendanceLog[];
   availabilities: Availability[];
+  assignments: ShiftAssignment[];
 }

@@ -78,6 +78,7 @@ export default function PrivacyPolicy() {
             <li>Nicht bestätigte Registrierungen: 7 Tage.</li>
             <li>Anwesenheitsprotokolle: 6 Monate.</li>
             <li>Verfügbarkeitsangaben der Supervisoren (Schichtplanung): 6 Monate.</li>
+            <li>Schichtzuteilungen (welcher Supervisor welche Schicht übernimmt): 6 Monate.</li>
             <li>Benachrichtigungen: 90 Tage.</li>
             <li>Änderungsprotokoll der Mitgliedsdaten und Feedback-Meldungen: 1 Jahr.</li>
             <li>Datensicherungen (Backups): 30 Tage.</li>

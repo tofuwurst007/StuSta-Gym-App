@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   toDateKey, parseDateKey, getWeekStart, addWeeks, getNextWeekStart,
-  dateOfWeekDay, formatShortDate, formatWeekRange, isAvailabilityDue,
+  dateOfWeekDay, formatShortDate, formatWeekRange, isReminderWindow, defaultAvailabilityWeek, availabilityDeadline,
 } from './week';
 
 // Iterate local calendar days (constructed via Y/M/D, so DST never skips a day).
@@ -169,21 +169,41 @@ describe('formatShortDate / formatWeekRange', () => {
   });
 });
 
-describe('isAvailabilityDue', () => {
-  it('is false Mon–Wed and true Thu–Sun', () => {
-    const expected = [false, false, false, true, true, true, true]; // Mon 9 Nov .. Sun 15 Nov 2026
-    expected.forEach((exp, i) => expect(isAvailabilityDue(new Date(2026, 10, 9 + i, 12))).toBe(exp));
+describe('isReminderWindow (planning on Thursday)', () => {
+  it('is true Mon–Wed and false Thu–Sun', () => {
+    const expected = [true, true, true, false, false, false, false]; // Mon 16 Nov .. Sun 22 Nov 2026
+    expected.forEach((exp, i) => expect(isReminderWindow(new Date(2026, 10, 16 + i, 12))).toBe(exp));
   });
 
   it('switches exactly at local midnight Wed->Thu and Sun->Mon', () => {
-    expect(isAvailabilityDue(new Date(2026, 10, 11, 23, 59, 59))).toBe(false);
-    expect(isAvailabilityDue(new Date(2026, 10, 12, 0, 0, 0))).toBe(true);
-    expect(isAvailabilityDue(new Date(2026, 10, 15, 23, 59, 59))).toBe(true);
-    expect(isAvailabilityDue(new Date(2026, 10, 16, 0, 0, 0))).toBe(false);
+    expect(isReminderWindow(new Date(2026, 10, 18, 23, 59, 59))).toBe(true);
+    expect(isReminderWindow(new Date(2026, 10, 19, 0, 0, 0))).toBe(false);
+    expect(isReminderWindow(new Date(2026, 10, 22, 23, 59, 59))).toBe(false);
+    expect(isReminderWindow(new Date(2026, 10, 23, 0, 0, 0))).toBe(true);
+  });
+});
+
+describe('defaultAvailabilityWeek', () => {
+  it('is next week Mon–Thu and the week after next Fri–Sun', () => {
+    const expected = ['2026-11-23', '2026-11-23', '2026-11-23', '2026-11-23', '2026-11-30', '2026-11-30', '2026-11-30'];
+    expected.forEach((exp, i) => expect(defaultAvailabilityWeek(new Date(2026, 10, 16 + i, 12))).toBe(exp));
   });
 
-  it('is true on DST transition Sundays', () => {
-    expect(isAvailabilityDue(new Date(2026, 2, 29, 3, 30))).toBe(true);
-    expect(isAvailabilityDue(new Date(2026, 9, 25, 2, 30))).toBe(true);
+  it('handles the DST Sunday and the year boundary', () => {
+    expect(defaultAvailabilityWeek(new Date(2026, 9, 25, 2, 30))).toBe('2026-11-02');
+    expect(defaultAvailabilityWeek(new Date(2026, 11, 31, 12))).toBe('2027-01-04');
+  });
+});
+
+describe('availabilityDeadline', () => {
+  it('is Wednesday 23:59:59 local time of the week before', () => {
+    const d = availabilityDeadline('2026-11-23');
+    expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds()])
+      .toEqual([2026, 10, 18, 23, 59, 59]);
+  });
+
+  it('works across a year boundary', () => {
+    const d = availabilityDeadline('2027-01-04');
+    expect([d.getFullYear(), d.getMonth(), d.getDate()]).toEqual([2026, 11, 30]);
   });
 });

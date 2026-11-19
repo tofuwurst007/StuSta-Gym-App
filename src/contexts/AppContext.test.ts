@@ -10,7 +10,7 @@ const av = (id: string, supervisorId: string, weekStart: string, shiftBlockIds: 
 });
 
 const state = (availabilities: Availability[]): AppState => ({
-  users: [], shiftBlocks: [], spontaneousOpenings: [], notifications: [], attendanceLogs: [], availabilities,
+  users: [], shiftBlocks: [], spontaneousOpenings: [], notifications: [], attendanceLogs: [], availabilities, assignments: [],
 });
 
 describe('reducer UPSERT_AVAILABILITY', () => {
@@ -68,5 +68,29 @@ describe('reducer UPSERT_AVAILABILITY', () => {
     s = reducer(s, { type: 'UPSERT_AVAILABILITY', payload: av('first', 'u1', '2026-11-16', ['s1']) });
     s = reducer(s, { type: 'UPSERT_AVAILABILITY', payload: av('second', 'u1', '2026-11-16', ['s2']) });
     expect(s.availabilities).toEqual([av('first', 'u1', '2026-11-16', ['s2'])]);
+  });
+});
+
+describe('reducer SET_ASSIGNMENT', () => {
+  const base = { ...state([]), assignments: [
+    { shiftBlockId: 's1', weekStart: '2026-11-16', supervisorId: 'u1', supervisorName: 'A' },
+    { shiftBlockId: 's1', weekStart: '2026-11-23', supervisorId: 'u1', supervisorName: 'A' },
+  ] };
+
+  it('assigns only in the given week', () => {
+    const next = reducer(base, { type: 'SET_ASSIGNMENT', payload: { shiftId: 's1', weekStart: '2026-11-23', supervisorId: 'u2', supervisorName: 'B' } });
+    expect(next.assignments.find(a => a.weekStart === '2026-11-16')?.supervisorId).toBe('u1');
+    expect(next.assignments.find(a => a.weekStart === '2026-11-23')?.supervisorId).toBe('u2');
+    expect(next.assignments).toHaveLength(2);
+  });
+
+  it('unassigns only in the given week', () => {
+    const next = reducer(base, { type: 'SET_ASSIGNMENT', payload: { shiftId: 's1', weekStart: '2026-11-16', supervisorId: null } });
+    expect(next.assignments).toEqual([base.assignments[1]]);
+  });
+
+  it('adds a new assignment for an open slot', () => {
+    const next = reducer(base, { type: 'SET_ASSIGNMENT', payload: { shiftId: 's2', weekStart: '2026-11-16', supervisorId: 'u3', supervisorName: 'C' } });
+    expect(next.assignments).toHaveLength(3);
   });
 });

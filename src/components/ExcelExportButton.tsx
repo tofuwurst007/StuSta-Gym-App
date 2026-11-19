@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { downloadScheduleWorkbook, plannableStaff } from '../utils/excelExport';
 import { formatWeekRange } from '../utils/week';
+import { blocksForWeek } from '../utils/assignments';
 
 export default function ExcelExportButton({ weekStart, label = '⬇ Excel' }: { weekStart: string; label?: string }) {
   const { state } = useApp();
@@ -15,7 +16,7 @@ export default function ExcelExportButton({ weekStart, label = '⬇ Excel' }: { 
       const availabilities = state.availabilities.filter(a => a.weekStart === weekStart);
       await downloadScheduleWorkbook({
         weekStart,
-        shiftBlocks: state.shiftBlocks,
+        shiftBlocks: blocksForWeek(state.shiftBlocks, state.assignments, weekStart),
         availabilities,
         supervisors: plannableStaff(state.users, availabilities),
       });

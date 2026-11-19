@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { DAY_NAMES, getOpeningHoursForDay, isGymOpenNow, getTodayOpeningHours, nowHHMM } from '../utils/openingHours';
 import { localISODate } from '../utils/date';
+import { blocksForWeek } from '../utils/assignments';
+import { getWeekStart } from '../utils/week';
 
 export default function Home() {
   const { state, loading, loadError } = useApp();
@@ -13,8 +15,9 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
-  const gymOpen = isGymOpenNow(state.shiftBlocks, state.spontaneousOpenings);
-  const todaySlots = getTodayOpeningHours(state.shiftBlocks, state.spontaneousOpenings);
+  const weekBlocks = blocksForWeek(state.shiftBlocks, state.assignments, getWeekStart());
+  const gymOpen = isGymOpenNow(weekBlocks, state.spontaneousOpenings);
+  const todaySlots = getTodayOpeningHours(weekBlocks, state.spontaneousOpenings);
   const todayDow = (new Date().getDay() + 6) % 7;
   const today = localISODate();
   const nextSlot = todaySlots.find(s => s.start > nowHHMM());
@@ -72,7 +75,7 @@ export default function Home() {
         <h3 className="section-title">Weekly Schedule</h3>
         <div className="week-grid">
           {DAY_NAMES.map((day, dow) => {
-            const slots = getOpeningHoursForDay(dow, state.shiftBlocks, state.spontaneousOpenings, dow === todayDow ? today : undefined);
+            const slots = getOpeningHoursForDay(dow, weekBlocks, state.spontaneousOpenings, dow === todayDow ? today : undefined);
             const isToday = dow === todayDow;
             return (
               <div key={dow} className={`day-card ${isToday ? 'day-today' : ''}`}>

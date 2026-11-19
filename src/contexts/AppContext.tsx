@@ -10,7 +10,8 @@
  *  - Realtime subscriptions keep state fresh when other users make changes.
  */
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
-import type { AppState, ShiftBlock, SpontaneousOpening, User, Notification, AttendanceLog, Availability } from '../types';
+import type { AppState, ShiftBlock, SpontaneousOpening, User, Notification, AttendanceLog, Availability, ShiftAssignment } from '../types';
+import { assignmentWindow } from '../utils/assignments';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { localISODate } from '../utils/date';
@@ -22,8 +23,8 @@ type Action =
   | { type: 'UPDATE_USER'; payload: User }
   | { type: 'DELETE_USER'; payload: string }
   | { type: 'ADD_USER'; payload: User }
-  | { type: 'CLAIM_SHIFT'; payload: { shiftId: string; supervisorId: string; supervisorName: string } }
-  | { type: 'UNCLAIM_SHIFT'; payload: string }
+  // supervisorId null = unassign. Claiming, admin assignment and cancelling all go through this.
+  | { type: 'SET_ASSIGNMENT'; payload: { shiftId: string; weekStart: string; supervisorId: string | null; supervisorName?: string } }
   | { type: 'UPDATE_SHIFT'; payload: ShiftBlock }
   | { type: 'ADD_SHIFT'; payload: ShiftBlock }
   | { type: 'DELETE_SHIFT'; payload: string }
@@ -33,13 +34,12 @@ type Action =
   | { type: 'MARK_NOTIFICATION_READ'; payload: string }
   | { type: 'ADD_ATTENDANCE'; payload: AttendanceLog }
   | { type: 'CHECKOUT_ATTENDANCE'; payload: { id: string; checkOut: string } }
-  | { type: 'ASSIGN_SHIFT'; payload: { shiftId: string; supervisorId: string; supervisorName: string } }
   | { type: 'UPSERT_AVAILABILITY'; payload: Availability };
 
 export type SyncResult = { ok: boolean; error?: string };
 
 const EMPTY_STATE: AppState = {
-  users: [], shiftBlocks: [], spontaneousOpenings: [], notifications: [], attendanceLogs: [], availabilities: [],
+  users: [], shiftBlocks: [], spontaneousOpenings: [], notifications: [], attendanceLogs: [], availabilities: [], assignments: [],
 };
 
 // ─── Pure reducer ─────────────────────────────────────────────────────────────
@@ -50,17 +50,14 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'UPDATE_USER':  return { ...state, users: state.users.map(u => u.id === action.payload.id ? action.payload : u) };
     case 'DELETE_USER':  return { ...state, users: state.users.filter(u => u.id !== action.payload) };
     case 'ADD_USER':     return { ...state, users: [...state.users, action.payload] };
-    case 'CLAIM_SHIFT':
-    case 'ASSIGN_SHIFT':
-      return { ...state, shiftBlocks: state.shiftBlocks.map(s =>
-        s.id === action.payload.shiftId
-          ? { ...s, claimed: true, supervisorId: action.payload.supervisorId, supervisorName: action.payload.supervisorName }
-          : s
-      )};
-    case 'UNCLAIM_SHIFT':
-      return { ...state, shiftBlocks: state.shiftBlocks.map(s =>
-        s.id === action.payload ? { ...s, claimed: false, supervisorId: undefined, supervisorName: undefined } : s
-      )};
+    case 'SET_ASSIGNMENT': {
+      const { shiftId, weekStart, supervisorId, supervisorName } = action.payload;
+      const others = state.assignments.filter(a => !(a.shiftBlockId === shiftId && a.weekStart === weekStart));
+      return { ...state, assignments: supervisorId
+        ? [...others, { shiftBlockId: shiftId, weekStart, supervisorId, supervisorName }]
+        : others,
+      };
+    }
     case 'UPDATE_SHIFT':       return { ...state, shiftBlocks: state.shiftBlocks.map(s => s.id === action.payload.id ? action.payload : s) };
     case 'ADD_SHIFT':          return { ...state, shiftBlocks: [...state.shiftBlocks, action.payload] };
     case 'DELETE_SHIFT':       return { ...state, shiftBlocks: state.shiftBlocks.filter(s => s.id !== action.payload) };
@@ -106,12 +103,8 @@ function toUser(r: any): User {
 type Assignment = { supervisor_id: string | null; supervisor_name: string | null };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toShift(r: any, who?: Assignment): ShiftBlock {
-  return {
-    id: r.id, dayOfWeek: r.day_of_week, startTime: r.start_time, endTime: r.end_time,
-    claimed: !!r.is_claimed,
-    supervisorId: who?.supervisor_id || undefined, supervisorName: who?.supervisor_name || undefined,
-  };
+function toShift(r: any): ShiftBlock {
+  return { id: r.id, dayOfWeek: r.day_of_week, startTime: r.start_time, endTime: r.end_time, claimed: false };
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toSpont(r: any, who?: Assignment): SpontaneousOpening {
@@ -122,7 +115,7 @@ function toSpont(r: any, who?: Assignment): SpontaneousOpening {
 }
 
 // Public columns only — select('*') would be rejected, the supervisor columns aren't readable
-const SHIFT_COLUMNS = 'id,day_of_week,start_time,end_time,is_claimed';
+const SHIFT_COLUMNS = 'id,day_of_week,start_time,end_time';
 const SPONT_COLUMNS = 'id,date,start_time,end_time,note';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toNotif(r: any, readBroadcasts: Set<string>): Notification {
@@ -142,6 +135,17 @@ function toAvailability(r: any): Availability {
     weekStart: r.week_start, shiftBlockIds: r.shift_block_ids ?? [],
     note: r.note || undefined, updatedAt: r.updated_at ?? '',
   };
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toAssignments(coverage: any[], staff: any[]): ShiftAssignment[] {
+  const who = new Map(staff.map(r => [`${r.shift_block_id}|${r.week_start}`, r]));
+  return coverage.map(r => {
+    const w = who.get(`${r.shift_block_id}|${r.week_start}`);
+    return {
+      shiftBlockId: r.shift_block_id, weekStart: r.week_start,
+      supervisorId: w?.supervisor_id ?? undefined, supervisorName: w?.supervisor_name ?? undefined,
+    };
+  });
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toAttendance(r: any): AttendanceLog {
@@ -199,7 +203,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const refetch = useCallback(async () => {
     try {
-      const [users, shifts, sponts, notifs, logs, reads, assignments, avails] = await Promise.all([
+      const win = assignmentWindow();
+      const [users, shifts, sponts, notifs, logs, reads, assignments, avails, coverage, staffCoverage] = await Promise.all([
         supabase.from('profiles').select('*').order('name'),
         supabase.from('shift_blocks').select(SHIFT_COLUMNS).order('day_of_week').order('start_time'),
         supabase.from('spontaneous_openings').select(SPONT_COLUMNS).order('date', { ascending: false }),
@@ -215,6 +220,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ? supabase.from('availabilities').select('*').gte('week_start', localISODate(new Date(Date.now() - 21 * 864e5)))
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           : Promise.resolve({ data: [] as any[], error: null }),
+        // Which blocks are covered in which week — public; names only via the staff function
+        supabase.from('shift_assignments').select('shift_block_id,week_start').gte('week_start', win.from).lte('week_start', win.to),
+        isStaff
+          ? supabase.rpc('staff_shift_assignments', { p_from: win.from, p_to: win.to })
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          : Promise.resolve({ data: [] as any[], error: null }),
       ]);
 
       // The schedule is what everyone needs; without it there's nothing meaningful to show
@@ -223,26 +234,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setLoadError(true);
         return;
       }
-      for (const res of [users, sponts, notifs, logs, reads, assignments, avails]) {
+      for (const res of [users, sponts, notifs, logs, reads, assignments, avails, coverage, staffCoverage]) {
         if (res.error) console.warn('[AppContext] partial fetch error:', res.error.message);
       }
 
       const readBroadcasts = new Set((reads.data ?? []).map(r => r.notification_id));
-      const shiftWho = new Map<string, Assignment>();
       const spontWho = new Map<string, Assignment>();
       for (const a of (assignments.data ?? []) as (Assignment & { kind: string; id: string })[]) {
-        (a.kind === 'shift' ? shiftWho : spontWho).set(a.id, a);
+        if (a.kind === 'spontaneous') spontWho.set(a.id, a);
       }
       setLoadError(false);
       dispatch({
         type: 'SET_STATE',
         payload: {
           users:               (users.data  ?? []).map(toUser),
-          shiftBlocks:         (shifts.data ?? []).map(r => toShift(r, shiftWho.get(r.id))),
+          shiftBlocks:         (shifts.data ?? []).map(toShift),
           spontaneousOpenings: (sponts.data ?? []).map(r => toSpont(r, spontWho.get(r.id))),
           notifications:       (notifs.data ?? []).map(r => toNotif(r, readBroadcasts)),
           attendanceLogs:      (logs.data   ?? []).map(toAttendance),
           availabilities:      (avails.data ?? []).map(toAvailability),
+          assignments:         toAssignments(coverage.data ?? [], staffCoverage.data ?? []),
         },
       });
     } catch (err) {
@@ -264,6 +275,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'spontaneous_openings' }, () => refetch())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => refetch())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'availabilities' }, () => refetch())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_assignments' }, () => refetch())
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -320,18 +332,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (!isUuid(action.payload)) { error = { message: STILL_SAVING }; break; }
           error = expectRows(await supabase.from('shift_blocks').delete().eq('id', action.payload).select('id'));
           break;
-        case 'CLAIM_SHIFT':
-        case 'UNCLAIM_SHIFT': {
-          const shiftId = action.type === 'CLAIM_SHIFT' ? action.payload.shiftId : action.payload;
-          if (!isUuid(shiftId)) { error = { message: STILL_SAVING }; break; }
-          // Server-side function: atomic, and it fills in the supervisor's id/name itself
-          ({ error } = await supabase.rpc('claim_shift', { p_shift_id: shiftId, p_claim: action.type === 'CLAIM_SHIFT' }));
-          break;
-        }
-        case 'ASSIGN_SHIFT':
+        case 'SET_ASSIGNMENT':
           if (!isUuid(action.payload.shiftId)) { error = { message: STILL_SAVING }; break; }
-          ({ error } = await supabase.rpc('admin_assign_shift', {
-            p_shift_id: action.payload.shiftId, p_supervisor_id: action.payload.supervisorId,
+          // Server-side function: atomic, checks who may do what, fills in the name itself
+          ({ error } = await supabase.rpc('set_shift_assignment', {
+            p_shift_id: action.payload.shiftId,
+            p_week_start: action.payload.weekStart,
+            p_supervisor_id: action.payload.supervisorId,
           }));
           break;
         case 'UPSERT_AVAILABILITY':

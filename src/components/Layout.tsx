@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useApp } from '../contexts/AppContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { AvatarDisplay } from './AvatarPicker';
-import { getNextWeekStart, isAvailabilityDue } from '../utils/week';
+import { getNextWeekStart, isReminderWindow } from '../utils/week';
 
 // ── Inline SVG icon set ───────────────────────────────────────────────────────
 const Icon = {
@@ -123,7 +123,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const isSup   = !isGuest && (currentUser!.role === 'supervisor' || currentUser!.role === 'admin');
   const isAdmin = !isGuest && currentUser!.role === 'admin';
   const nextWeek = getNextWeekStart();
-  const availabilityMissing = currentUser?.role === 'supervisor' && isAvailabilityDue()
+  const availabilityMissing = currentUser?.role === 'supervisor' && isReminderWindow()
     && !state.availabilities.some(a => a.supervisorId === currentUser.id && a.weekStart === nextWeek);
 
   const handleLogout = () => { logout(); navigate('/login'); };
@@ -185,7 +185,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <NavLink to="/availability" onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
             <span className="nav-icon">{Icon.availability}</span>
             <span className="nav-text">Availability</span>
-            {availabilityMissing && <span className="nav-badge nav-badge-warn" title="Next week not submitted yet">!</span>}
+            {availabilityMissing && <span className="nav-badge nav-badge-warn" title="Please enter next week's availability by Wednesday">!</span>}
           </NavLink>
           <NavLink to="/spontaneous" onClick={onClick} className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
             <span className="nav-icon">{Icon.bolt}</span>

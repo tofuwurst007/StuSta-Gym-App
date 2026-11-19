@@ -1,8 +1,8 @@
-import type { ShiftBlock, SpontaneousOpening } from '../types';
+import type { ShiftAssignment, ShiftBlock, SpontaneousOpening } from '../types';
 import { localISODate } from './date';
+import { dateOfWeekDay } from './week';
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const RRULE_DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
 
 // Europe/Berlin definition so DTSTART;TZID=Europe/Berlin is valid (RFC 5545 §3.6.5)
 const VTIMEZONE_BERLIN = [
@@ -57,14 +57,6 @@ function fold(line: string): string {
   return parts.join('\r\n ');
 }
 
-function nextWeekdayDate(dayOfWeek: number): string {
-  const now = new Date();
-  const todayDow = (now.getDay() + 6) % 7; // Mon=0
-  const target = new Date(now);
-  target.setDate(now.getDate() + (dayOfWeek - todayDow + 7) % 7);
-  return localISODate(target);
-}
-
 function download(lines: string[], filename: string): void {
   const ics = lines.map(fold).join('\r\n') + '\r\n';
   const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
@@ -76,7 +68,7 @@ function download(lines: string[], filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-export function exportShiftsICS(shiftBlocks: ShiftBlock[]): void {
+export function exportShiftsICS(shiftBlocks: ShiftBlock[], assignments: ShiftAssignment[]): void {
   const stamp = icsStamp();
   const lines: string[] = [
     'BEGIN:VCALENDAR',
@@ -89,19 +81,27 @@ export function exportShiftsICS(shiftBlocks: ShiftBlock[]): void {
     ...VTIMEZONE_BERLIN,
   ];
 
-  for (const shift of shiftBlocks.filter(s => s.claimed)) {
-    const baseDate = nextWeekdayDate(shift.dayOfWeek);
+  // Shifts are planned week by week, so every covered shift is one dated event (from today on)
+  const today = localISODate();
+  const blocks = new Map(shiftBlocks.map(b => [b.id, b]));
+  const events = assignments
+    .map(a => ({ a, shift: blocks.get(a.shiftBlockId) }))
+    .filter((e): e is { a: ShiftAssignment; shift: ShiftBlock } => !!e.shift)
+    .map(({ a, shift }) => ({ a, shift, date: localISODate(dateOfWeekDay(a.weekStart, shift.dayOfWeek)) }))
+    .filter(e => e.date >= today)
+    .sort((x, y) => x.date.localeCompare(y.date) || x.shift.startTime.localeCompare(y.shift.startTime));
+
+  for (const { a, shift, date } of events) {
     // Names are only loaded for staff; members export the plain schedule
-    const by = shift.supervisorName ? ` — ${shift.supervisorName}` : '';
+    const by = a.supervisorName ? ` — ${a.supervisorName}` : '';
     lines.push(
       'BEGIN:VEVENT',
-      `UID:shift-${shift.id}@stusta-gym`,
+      `UID:shift-${shift.id}-${a.weekStart}@stusta-gym`,
       `DTSTAMP:${stamp}`,
-      `DTSTART;TZID=Europe/Berlin:${icsDate(baseDate, shift.startTime)}`,
-      `DTEND;TZID=Europe/Berlin:${icsDate(baseDate, shift.endTime)}`,
-      `RRULE:FREQ=WEEKLY;BYDAY=${RRULE_DAYS[shift.dayOfWeek]}`,
+      `DTSTART;TZID=Europe/Berlin:${icsDate(date, shift.startTime)}`,
+      `DTEND;TZID=Europe/Berlin:${icsDate(date, shift.endTime)}`,
       `SUMMARY:${esc(`🏋️ Gym Open${by}`)}`,
-      `DESCRIPTION:${esc(`Supervised gym session${by ? ` by ${shift.supervisorName}` : ''} (${DAY_NAMES[shift.dayOfWeek]} ${shift.startTime}–${shift.endTime})`)}`,
+      `DESCRIPTION:${esc(`Supervised gym session${by ? ` by ${a.supervisorName}` : ''} (${DAY_NAMES[shift.dayOfWeek]} ${shift.startTime}–${shift.endTime})`)}`,
       'CATEGORIES:StuSta Gym',
       'END:VEVENT',
     );

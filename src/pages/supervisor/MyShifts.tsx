@@ -1,39 +1,57 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { Link } from 'react-router-dom';
-import { DAY_NAMES } from '../../utils/openingHours';
-import { formatWeekRange, getNextWeekStart } from '../../utils/week';
-import type { Notification } from '../../types';
+import { DAY_NAMES, nowHHMM } from '../../utils/openingHours';
+import { localISODate } from '../../utils/date';
+import { blocksForWeek } from '../../utils/assignments';
+import {
+  addWeeks, availabilityDeadline, dateOfWeekDay, defaultAvailabilityWeek, formatShortDate,
+  formatWeekRange, getWeekStart,
+} from '../../utils/week';
+import WeekSwitcher from '../../components/WeekSwitcher';
+import type { Notification, ShiftBlock } from '../../types';
 
 export default function MyShifts() {
   const { state, dispatch } = useApp();
   const { currentUser } = useAuth();
+  const [weekStart, setWeekStart] = useState(getWeekStart());
   if (!currentUser) return null;
 
-  const nextWeek = getNextWeekStart();
-  const hasNextWeekAvailability = state.availabilities.some(
-    a => a.supervisorId === currentUser.id && a.weekStart === nextWeek);
-  const myShifts = state.shiftBlocks.filter(s => s.supervisorId === currentUser.id);
-  const availableShifts = state.shiftBlocks.filter(s => !s.claimed);
+  const availWeek = defaultAvailabilityWeek();
+  const hasAvailability = state.availabilities.some(
+    a => a.supervisorId === currentUser.id && a.weekStart === availWeek);
+  const deadline = availabilityDeadline(availWeek);
+
+  const blocks = blocksForWeek(state.shiftBlocks, state.assignments, weekStart)
+    .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
+  const myShifts = blocks.filter(s => s.supervisorId === currentUser.id);
+  const availableShifts = blocks.filter(s => !s.claimed);
+
+  const today = localISODate();
+  const dateOf = (s: ShiftBlock) => dateOfWeekDay(weekStart, s.dayOfWeek);
+  const isPast = (s: ShiftBlock) => {
+    const d = localISODate(dateOf(s));
+    return d < today || (d === today && s.endTime <= nowHHMM());
+  };
 
   const claim = (shiftId: string) => {
     dispatch({
-      type: 'CLAIM_SHIFT',
-      payload: { shiftId, supervisorId: currentUser.id, supervisorName: currentUser.name },
+      type: 'SET_ASSIGNMENT',
+      payload: { shiftId, weekStart, supervisorId: currentUser.id, supervisorName: currentUser.name },
     });
   };
 
-  const unclaim = async (shiftId: string) => {
-    const shift = state.shiftBlocks.find(s => s.id === shiftId);
-    const res = await dispatch({ type: 'UNCLAIM_SHIFT', payload: shiftId });
+  const unclaim = async (shift: ShiftBlock) => {
+    const res = await dispatch({ type: 'SET_ASSIGNMENT', payload: { shiftId: shift.id, weekStart, supervisorId: null } });
     if (!res.ok) return; // the error banner shows why
 
     // Notify everyone — without the supervisor's name: members must not learn who covers which shift
-    const when = shift ? ` (${DAY_NAMES[shift.dayOfWeek]} ${shift.startTime}–${shift.endTime})` : '';
+    const when = `${DAY_NAMES[shift.dayOfWeek]} ${formatShortDate(dateOf(shift))} ${shift.startTime}–${shift.endTime}`;
     const notif: Notification = {
       id: `n-${Date.now()}`,
       userId: 'all',
-      message: `A shift was cancelled${when}. Opening hours may have changed.`,
+      message: `A shift was cancelled (${when}). Opening hours may have changed.`,
       type: 'alert',
       read: false,
       createdAt: new Date().toISOString(),
@@ -41,14 +59,11 @@ export default function MyShifts() {
     dispatch({ type: 'ADD_NOTIFICATION', payload: notif });
   };
 
-  const grouped = (shifts: typeof state.shiftBlocks) =>
-    DAY_NAMES.reduce((acc, _, dow) => {
-      acc[dow] = shifts.filter(s => s.dayOfWeek === dow);
-      return acc;
-    }, {} as Record<number, typeof state.shiftBlocks>);
+  const byDay = (shifts: ShiftBlock[]) =>
+    DAY_NAMES.map((day, dow) => ({ day, dow, shifts: shifts.filter(s => s.dayOfWeek === dow) }))
+      .filter(g => g.shifts.length > 0);
 
-  const myGrouped = grouped(myShifts);
-  const availGrouped = grouped(availableShifts);
+  const currentWeek = getWeekStart();
 
   return (
     <div className="page">
@@ -56,55 +71,52 @@ export default function MyShifts() {
         <h2>My Shifts</h2>
       </div>
 
-      {currentUser.role === 'supervisor' && !hasNextWeekAvailability && (
+      {currentUser.role === 'supervisor' && !hasAvailability && (
         <Link to="/availability" className="banner banner-warn banner-link">
           <span className="banner-icon">📅</span>
-          <span>Enter your availability for next week ({formatWeekRange(nextWeek)}) →</span>
+          <span>
+            Enter your availability for {formatWeekRange(availWeek)}
+            {deadline > new Date() ? ` by Wed ${formatShortDate(deadline)}` : ''} →
+          </span>
         </Link>
       )}
 
-      {/* My claimed shifts */}
+      <WeekSwitcher weekStart={weekStart} onChange={setWeekStart} minWeek={currentWeek} maxWeek={addWeeks(currentWeek, 4)} />
+
       <section className="section">
-        <h3 className="section-title">My Claimed Shifts ({myShifts.length})</h3>
+        <h3 className="section-title">My Shifts ({myShifts.length})</h3>
         {myShifts.length === 0 ? (
-          <p className="empty-state">You haven't claimed any shifts yet.</p>
-        ) : (
-          DAY_NAMES.map((day, dow) =>
-            myGrouped[dow]?.length > 0 ? (
-              <div key={dow} className="shift-day-group">
-                <p className="shift-day-label">{day}</p>
-                {myGrouped[dow].map(s => (
-                  <div key={s.id} className="shift-row shift-mine">
-                    <span className="shift-time">{s.startTime} – {s.endTime}</span>
-                    <button className="btn-danger-sm" onClick={() => unclaim(s.id)}>Cancel</button>
-                  </div>
-                ))}
+          <p className="empty-state">You have no shifts this week.</p>
+        ) : byDay(myShifts).map(g => (
+          <div key={g.dow} className="shift-day-group">
+            <p className="shift-day-label">{g.day} · {formatShortDate(dateOfWeekDay(weekStart, g.dow))}</p>
+            {g.shifts.map(s => (
+              <div key={s.id} className="shift-row shift-mine">
+                <span className="shift-time">{s.startTime} – {s.endTime}</span>
+                {isPast(s)
+                  ? <span className="shift-past-label">done</span>
+                  : <button className="btn-danger-sm" onClick={() => unclaim(s)}>Cancel</button>}
               </div>
-            ) : null
-          )
-        )}
+            ))}
+          </div>
+        ))}
       </section>
 
-      {/* Available shifts */}
       <section className="section">
-        <h3 className="section-title">Available Shifts ({availableShifts.length})</h3>
-        {availableShifts.length === 0 ? (
-          <p className="empty-state">All shifts are covered.</p>
-        ) : (
-          DAY_NAMES.map((day, dow) =>
-            availGrouped[dow]?.length > 0 ? (
-              <div key={dow} className="shift-day-group">
-                <p className="shift-day-label">{day}</p>
-                {availGrouped[dow].map(s => (
-                  <div key={s.id} className="shift-row shift-available">
-                    <span className="shift-time">{s.startTime} – {s.endTime}</span>
-                    <button className="btn-primary-sm" onClick={() => claim(s.id)}>Claim</button>
-                  </div>
-                ))}
+        <h3 className="section-title">Open Shifts ({availableShifts.filter(s => !isPast(s)).length})</h3>
+        {availableShifts.filter(s => !isPast(s)).length === 0 ? (
+          <p className="empty-state">All shifts this week are covered.</p>
+        ) : byDay(availableShifts.filter(s => !isPast(s))).map(g => (
+          <div key={g.dow} className="shift-day-group">
+            <p className="shift-day-label">{g.day} · {formatShortDate(dateOfWeekDay(weekStart, g.dow))}</p>
+            {g.shifts.map(s => (
+              <div key={s.id} className="shift-row shift-available">
+                <span className="shift-time">{s.startTime} – {s.endTime}</span>
+                <button className="btn-primary-sm" onClick={() => claim(s.id)}>Claim</button>
               </div>
-            ) : null
-          )
-        )}
+            ))}
+          </div>
+        ))}
       </section>
     </div>
   );

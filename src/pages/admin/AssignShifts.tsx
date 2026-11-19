@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { DAY_NAMES } from '../../utils/openingHours';
-import { addWeeks, dateOfWeekDay, formatShortDate, formatWeekRange, getNextWeekStart, getWeekStart } from '../../utils/week';
+import { addWeeks, availabilityDeadline, dateOfWeekDay, formatShortDate, formatWeekRange, getNextWeekStart, getWeekStart } from '../../utils/week';
+import { blocksForWeek, planCopyFromPreviousWeek } from '../../utils/assignments';
 import { planAutoAssign, type ProposedAssignment } from '../../utils/autoAssign';
 import WeekSwitcher from '../../components/WeekSwitcher';
 import ExcelExportButton from '../../components/ExcelExportButton';
@@ -14,6 +15,7 @@ export default function AssignShifts() {
   const { state, dispatch } = useApp();
   const [weekStart, setWeekStart] = useState(getNextWeekStart());
   const [proposal, setProposal] = useState<ProposedAssignment[] | null>(null);
+  const [proposalKind, setProposalKind] = useState<'auto' | 'copy'>('auto');
   const [toast, setToast] = useState('');
 
   const weekAvail = state.availabilities.filter(a => a.weekStart === weekStart);
@@ -23,21 +25,22 @@ export default function AssignShifts() {
   const submittedIds = new Set(weekAvail.map(a => a.supervisorId));
   const missing = supervisors.filter(s => !submittedIds.has(s.id));
 
-  const sortedShifts = [...state.shiftBlocks].sort((a, b) =>
+  const sortedShifts = blocksForWeek(state.shiftBlocks, state.assignments, weekStart).sort((a, b) =>
     a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
   const covered = sortedShifts.filter(s => s.claimed).length;
 
   const availableFor = (shiftId: string) => weekAvail.filter(a => a.shiftBlockIds.includes(shiftId));
-  const loadOf = (supId: string) => state.shiftBlocks.filter(s => s.supervisorId === supId).length;
+  const loadOf = (supId: string) => sortedShifts.filter(s => s.supervisorId === supId).length;
 
   const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
   const assign = (shift: ShiftBlock, supervisorId: string, supervisorName: string) => {
-    if (shift.supervisorId === supervisorId) {
-      dispatch({ type: 'UNCLAIM_SHIFT', payload: shift.id });
-    } else {
-      dispatch({ type: 'ASSIGN_SHIFT', payload: { shiftId: shift.id, supervisorId, supervisorName } });
-    }
+    dispatch({
+      type: 'SET_ASSIGNMENT',
+      payload: shift.supervisorId === supervisorId
+        ? { shiftId: shift.id, weekStart, supervisorId: null }
+        : { shiftId: shift.id, weekStart, supervisorId, supervisorName },
+    });
   };
 
   const applyProposal = async () => {
@@ -47,8 +50,8 @@ export default function AssignShifts() {
     let ok = 0;
     for (const p of todo) {
       const res = await dispatch({
-        type: 'ASSIGN_SHIFT',
-        payload: { shiftId: p.shiftId, supervisorId: p.supervisorId, supervisorName: p.supervisorName },
+        type: 'SET_ASSIGNMENT',
+        payload: { shiftId: p.shiftId, weekStart, supervisorId: p.supervisorId, supervisorName: p.supervisorName },
       });
       if (res.ok) ok++;
     }
@@ -82,7 +85,9 @@ export default function AssignShifts() {
         payload: {
           id: `n-${Date.now()}-r${i}`,
           userId: sup.id,
-          message: `⏰ Please enter your availability for ${formatWeekRange(weekStart)}.`,
+          message: availabilityDeadline(weekStart) > new Date()
+            ? `⏰ Please enter your availability for ${formatWeekRange(weekStart)} by Wed ${formatShortDate(availabilityDeadline(weekStart))}`
+            : `⏰ Please enter your availability for ${formatWeekRange(weekStart)} as soon as possible.`,
           type: 'warning',
           read: false,
           createdAt: new Date().toISOString(),
@@ -100,7 +105,7 @@ export default function AssignShifts() {
       <div className="page-header">
         <div>
           <h2>Assign Shifts</h2>
-          <p className="page-subtitle">Tap a name to assign the shift. Tap again to remove. Changes go live in the shift plan immediately.</p>
+          <p className="page-subtitle">Tap a name to assign the shift, tap again to remove. Assignments apply only to the selected week.</p>
         </div>
       </div>
 
@@ -144,8 +149,13 @@ export default function AssignShifts() {
           <span className="coverage-text"><strong>{covered}</strong> / {sortedShifts.length} shifts covered</span>
         </div>
         <div className="assign-toolbar-actions">
-          <button className="btn-primary-sm" onClick={() => setProposal(planAutoAssign(state.shiftBlocks, weekAvail))} disabled={weekAvail.length === 0}>
+          <button className="btn-primary-sm" onClick={() => { setProposalKind('auto'); setProposal(planAutoAssign(sortedShifts, weekAvail)); }} disabled={weekAvail.length === 0}>
             ✨ Auto-assign
+          </button>
+          <button className="btn-ghost-sm" onClick={() => { setProposalKind('copy'); setProposal(planCopyFromPreviousWeek(state.shiftBlocks, state.assignments, weekStart)
+            // Skip people who said they can't do that shift this week
+            .filter(p => !submittedIds.has(p.supervisorId) || availableFor(p.shiftId).some(a => a.supervisorId === p.supervisorId))); }}>
+            ↻ Copy last week
           </button>
           <button className="btn-ghost-sm" onClick={notifyAssigned} disabled={covered === 0}>Notify supervisors</button>
           <ExcelExportButton weekStart={weekStart} />
@@ -156,13 +166,18 @@ export default function AssignShifts() {
         <div className="form-card proposal-card">
           {proposal.length === 0 ? (
             <>
-              <p className="proposal-title">Nothing to auto-assign</p>
-              <p className="empty-state">All shifts with available supervisors are already covered.</p>
+              <p className="proposal-title">{proposalKind === 'auto' ? 'Nothing to auto-assign' : 'Nothing to copy'}</p>
+              <p className="empty-state">{proposalKind === 'auto'
+                ? 'All shifts with available supervisors are already covered.'
+                : `Last week (${formatWeekRange(addWeeks(weekStart, -1))}) has no assignments for shifts that are still open.`}</p>
               <div className="form-actions"><button className="btn-ghost" onClick={() => setProposal(null)}>Close</button></div>
             </>
           ) : (
             <>
-              <p className="proposal-title">Auto-assign suggests {proposal.length} assignment{proposal.length === 1 ? '' : 's'}:</p>
+              <p className="proposal-title">
+                {proposalKind === 'auto' ? 'Auto-assign suggests' : `Copy from ${formatWeekRange(addWeeks(weekStart, -1))}:`}{' '}
+                {proposal.length} assignment{proposal.length === 1 ? '' : 's'}
+              </p>
               <ul className="proposal-list">
                 {proposal.map(p => {
                   const s = shiftById(p.shiftId);
@@ -243,7 +258,7 @@ export default function AssignShifts() {
                       </select>
                     )}
                     {s.supervisorId && (
-                      <button className="btn-ghost-sm assign-clear" onClick={() => dispatch({ type: 'UNCLAIM_SHIFT', payload: s.id })}>Unassign</button>
+                      <button className="btn-ghost-sm assign-clear" onClick={() => dispatch({ type: 'SET_ASSIGNMENT', payload: { shiftId: s.id, weekStart, supervisorId: null } })}>Unassign</button>
                     )}
                   </div>
                 </div>

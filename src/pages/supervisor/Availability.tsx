@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { DAY_NAMES } from '../../utils/openingHours';
-import { addWeeks, dateOfWeekDay, formatShortDate, getNextWeekStart, getWeekStart, isAvailabilityDue } from '../../utils/week';
+import { addWeeks, availabilityDeadline, dateOfWeekDay, defaultAvailabilityWeek, formatShortDate, getWeekStart } from '../../utils/week';
 import WeekSwitcher from '../../components/WeekSwitcher';
 
 export default function Availability() {
   const { state, dispatch } = useApp();
   const { currentUser } = useAuth();
-  const [weekStart, setWeekStart] = useState(getNextWeekStart());
+  const [weekStart, setWeekStart] = useState(defaultAvailabilityWeek());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [note, setNote] = useState('');
   const [dirty, setDirty] = useState(false);
@@ -73,8 +73,9 @@ export default function Availability() {
   };
 
   const currentWeek = getWeekStart();
-  const isNextWeek = weekStart === getNextWeekStart();
-  const showDueWarning = !existing && isNextWeek && isAvailabilityDue();
+  const deadline = availabilityDeadline(weekStart);
+  const deadlinePassed = new Date() > deadline;
+  const deadlineLabel = `Wed ${formatShortDate(deadline)}`;
 
   const updatedLabel = existing
     ? new Date(existing.updatedAt).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -85,7 +86,7 @@ export default function Availability() {
       <div className="page-header">
         <div>
           <h2>My Availability</h2>
-          <p className="page-subtitle">Tap every shift you could take. The admin assigns shifts from this.</p>
+          <p className="page-subtitle">Tap every shift you could take. Due Wednesday evening — the admin assigns next week's shifts on Thursday.</p>
         </div>
       </div>
 
@@ -93,10 +94,12 @@ export default function Availability() {
         weekStart={weekStart}
         onChange={w => { if (!dirty || window.confirm('Discard your unsaved changes for this week?')) setWeekStart(w); }} minWeek={currentWeek} maxWeek={addWeeks(currentWeek, 4)} />
 
-      {showDueWarning && (
-        <div className="banner banner-warn" role="status">
+      {!existing && !dirty && weekStart > currentWeek && (
+        <div className="banner banner-warn" role="status" data-testid="availability-due">
           <span className="banner-icon">⏰</span>
-          <span>Please submit your availability for next week so the admin can plan the shifts.</span>
+          <span>{deadlinePassed
+            ? `The deadline (${deadlineLabel}) has passed and shifts may already be assigned — enter it anyway so the admin can fill gaps.`
+            : `Please enter your availability by ${deadlineLabel} — shifts are assigned on Thursday.`}</span>
         </div>
       )}
       {existing && !dirty && (
@@ -105,10 +108,10 @@ export default function Availability() {
           <span>{savedFlash ? 'Saved! ' : ''}Submitted · last updated {updatedLabel}</span>
         </div>
       )}
-      {!existing && !showDueWarning && !dirty && (
+      {!existing && !dirty && weekStart === currentWeek && (
         <div className="banner banner-info" role="status">
           <span className="banner-icon">ℹ</span>
-          <span>Not submitted yet for this week.</span>
+          <span>This week is already planned. You can still add your availability for short-notice gaps.</span>
         </div>
       )}
 

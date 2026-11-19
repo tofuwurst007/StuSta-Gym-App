@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { exportShiftsICS, exportSpontaneousICS, googleCalendarLink } from '../utils/calendarExport';
 import { localISODate } from '../utils/date';
+import { blocksForWeek } from '../utils/assignments';
 
 const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -54,6 +55,7 @@ export default function WeeklyCalendar() {
   const baseMonday = weekStart(today);
   const monday   = addDays(baseMonday, offset * 7);
   const isCurrentWeek = offset === 0;
+  const weekBlocks = blocksForWeek(state.shiftBlocks, state.assignments, localISODate(monday));
 
   // Scroll to current time on mount (desktop only — mobile shows full day)
   useEffect(() => {
@@ -86,7 +88,7 @@ export default function WeeklyCalendar() {
         <button
           className="btn-ghost-sm"
           title="Export to .ics (importable into Google / Apple / Outlook Calendar)"
-          onClick={() => exportShiftsICS(state.shiftBlocks)}
+          onClick={() => exportShiftsICS(state.shiftBlocks, state.assignments)}
         >
           📥 Export .ics
         </button>
@@ -137,7 +139,7 @@ export default function WeeklyCalendar() {
 
             // Claimed shift blocks for this dow
             // (supervisor names are only loaded for staff; members just see "Gym Open")
-            const shiftEvents = state.shiftBlocks
+            const shiftEvents = weekBlocks
               .filter(s => s.dayOfWeek === dow && s.claimed)
               .map(s => ({
                 id: s.id,
@@ -155,7 +157,7 @@ export default function WeeklyCalendar() {
               }));
 
             // Free (unclaimed) blocks for this dow
-            const freeEvents = state.shiftBlocks
+            const freeEvents = weekBlocks
               .filter(s => s.dayOfWeek === dow && !s.claimed)
               .map(s => ({
                 id: s.id + '-free',
@@ -240,7 +242,7 @@ export default function WeeklyCalendar() {
           <span className="cal-export-label">📅 Google Calendar:</span>
           <button
             className="btn-ghost-sm"
-            onClick={() => exportShiftsICS(state.shiftBlocks)}
+            onClick={() => exportShiftsICS(state.shiftBlocks, state.assignments)}
           >
             Download .ics for Google / Apple / Outlook
           </button>

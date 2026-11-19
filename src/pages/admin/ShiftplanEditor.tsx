@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { DAY_NAMES, getMorningShift } from '../../utils/openingHours';
-import type { ShiftBlock, Notification } from '../../types';
+import type { ShiftBlock } from '../../types';
+import { blocksForWeek } from '../../utils/assignments';
 import ExcelExportButton from '../../components/ExcelExportButton';
-import { getNextWeekStart } from '../../utils/week';
+import { getNextWeekStart, getWeekStart } from '../../utils/week';
 
 export default function ShiftplanEditor() {
   const { state, dispatch } = useApp();
@@ -15,7 +16,8 @@ export default function ShiftplanEditor() {
   const [editForm, setEditForm] = useState({ startTime: '', endTime: '' });
   const [editError, setEditError] = useState('');
 
-  const dayShifts = state.shiftBlocks.filter(s => s.dayOfWeek === selectedDay)
+  const dayShifts = blocksForWeek(state.shiftBlocks, state.assignments, getWeekStart())
+    .filter(s => s.dayOfWeek === selectedDay)
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
   const validate = (f: { startTime: string; endTime: string }, ignoreId?: string): string => {
@@ -62,24 +64,6 @@ export default function ShiftplanEditor() {
     dispatch({ type: 'DELETE_SHIFT', payload: id });
   };
 
-  const unassign = async (id: string) => {
-    const shift = state.shiftBlocks.find(s => s.id === id);
-    const res = await dispatch({ type: 'UNCLAIM_SHIFT', payload: id });
-    if (!res.ok || !shift) return; // the error banner shows why
-
-    // Same notice as when a supervisor cancels the shift themselves
-    const notif: Notification = {
-      id: `n-${Date.now()}`,
-      userId: 'all',
-      // No supervisor name: members must not learn who covered which shift
-      message: `The shift ${DAY_NAMES[shift.dayOfWeek]} ${shift.startTime}–${shift.endTime} ` +
-        'is no longer covered. Opening hours may have changed.',
-      type: 'alert',
-      read: false,
-      createdAt: new Date().toISOString(),
-    };
-    dispatch({ type: 'ADD_NOTIFICATION', payload: notif });
-  };
 
   return (
     <div className="page">
@@ -165,14 +149,11 @@ export default function ShiftplanEditor() {
             <div key={s.id} className={`shift-row ${s.claimed ? 'shift-claimed' : 'shift-unclaimed'}`}>
               <span className="shift-time">{s.startTime} – {s.endTime}</span>
               {s.claimed ? (
-                <span className="shift-supervisor">{s.supervisorName || 'Claimed'}</span>
+                <span className="shift-supervisor" title="This week">{s.supervisorName || 'Covered'} · this week</span>
               ) : (
-                <span className="shift-unclaimed-label">Unclaimed</span>
+                <span className="shift-unclaimed-label" title="This week">Open this week</span>
               )}
               <div className="shift-actions">
-                {s.claimed && (
-                  <button className="btn-ghost-sm" onClick={() => unassign(s.id)}>Unassign</button>
-                )}
                 <button className="btn-ghost-sm" onClick={() => startEdit(s)}>Edit</button>
                 <button className="btn-danger-sm" onClick={() => deleteShift(s.id)}>Delete</button>
               </div>

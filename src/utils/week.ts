@@ -40,7 +40,24 @@ export function formatWeekRange(weekStart: string): string {
   return `${fmt(dateOfWeekDay(weekStart, 0))} – ${fmt(dateOfWeekDay(weekStart, 6))}`;
 }
 
-// From Thursday on, supervisors should have submitted next week's availability.
-export function isAvailabilityDue(date: Date = new Date()): boolean {
-  return (date.getDay() + 6) % 7 >= 3;
+// Shifts for next week are assigned on Thursday, so availability is due Wednesday evening.
+export const PLANNING_DAY = 3; // Thursday (0 = Monday)
+
+const dayIndex = (d: Date) => (d.getDay() + 6) % 7;
+
+/** Mon–Wed: the days on which supervisors get reminded to enter next week. */
+export function isReminderWindow(now: Date = new Date()): boolean {
+  return dayIndex(now) < PLANNING_DAY;
+}
+
+/** The week supervisors should be entering now: next week until planning day, then the one after. */
+export function defaultAvailabilityWeek(now: Date = new Date()): string {
+  return addWeeks(getWeekStart(now), dayIndex(now) <= PLANNING_DAY ? 1 : 2);
+}
+
+/** Last moment to enter availability for `weekStart`: Wednesday 23:59:59 of the week before. */
+export function availabilityDeadline(weekStart: string): Date {
+  const d = dateOfWeekDay(addWeeks(weekStart, -1), PLANNING_DAY - 1);
+  d.setHours(23, 59, 59, 999);
+  return d;
 }
