@@ -6,7 +6,7 @@ import { DAY_NAMES, nowHHMM } from '../../utils/openingHours';
 import { localISODate } from '../../utils/date';
 import { blocksForWeek } from '../../utils/assignments';
 import {
-  addWeeks, availabilityDeadline, dateOfWeekDay, defaultAvailabilityWeek, formatShortDate,
+  PERIOD_DAYS, addWeeks, availabilityDeadline, comparePeriodOrder, dateOfWeekDay, defaultAvailabilityWeek, formatShortDate,
   formatWeekRange, getWeekStart,
 } from '../../utils/week';
 import WeekSwitcher from '../../components/WeekSwitcher';
@@ -24,7 +24,7 @@ export default function MyShifts() {
   const deadline = availabilityDeadline(availWeek);
 
   const blocks = blocksForWeek(state.shiftBlocks, state.assignments, weekStart)
-    .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
+    .sort(comparePeriodOrder);
   const myShifts = blocks.filter(s => s.supervisorId === currentUser.id);
   const availableShifts = blocks.filter(s => !s.claimed);
 
@@ -60,7 +60,7 @@ export default function MyShifts() {
   };
 
   const byDay = (shifts: ShiftBlock[]) =>
-    DAY_NAMES.map((day, dow) => ({ day, dow, shifts: shifts.filter(s => s.dayOfWeek === dow) }))
+    PERIOD_DAYS.map(dow => ({ day: DAY_NAMES[dow], dow, shifts: shifts.filter(s => s.dayOfWeek === dow) }))
       .filter(g => g.shifts.length > 0);
 
   const currentWeek = getWeekStart();

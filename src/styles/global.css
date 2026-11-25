@@ -1609,3 +1609,4 @@ body {
   .admin-user-card { flex-wrap: wrap; }
   .admin-user-actions { width: 100%; justify-content: flex-end; }
 }
+.day-date { font-weight: 500; color: var(--text3); font-size: 0.85em; }

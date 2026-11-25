@@ -133,6 +133,7 @@ function toAvailability(r: any): Availability {
   return {
     id: r.id, supervisorId: r.supervisor_id, supervisorName: r.supervisor_name ?? '',
     weekStart: r.week_start, shiftBlockIds: r.shift_block_ids ?? [],
+    preferredBlockIds: r.preferred_block_ids ?? [],
     note: r.note || undefined, updatedAt: r.updated_at ?? '',
   };
 }
@@ -347,6 +348,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             supervisor_name: action.payload.supervisorName,
             week_start: action.payload.weekStart,
             shift_block_ids: action.payload.shiftBlockIds.filter(isUuid),
+            preferred_block_ids: (action.payload.preferredBlockIds ?? []).filter(isUuid),
             note: action.payload.note ?? null,
             updated_at: action.payload.updatedAt,
           }, { onConflict: 'supervisor_id,week_start' }));

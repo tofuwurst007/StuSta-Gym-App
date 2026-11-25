@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { DAY_NAMES } from '../../utils/openingHours';
-import { addWeeks, availabilityDeadline, dateOfWeekDay, defaultAvailabilityWeek, formatShortDate, getWeekStart } from '../../utils/week';
+import { PERIOD_DAYS, addWeeks, availabilityDeadline, dateOfWeekDay, defaultAvailabilityWeek, formatShortDate, getWeekStart } from '../../utils/week';
 import WeekSwitcher from '../../components/WeekSwitcher';
 
 export default function Availability() {
@@ -10,6 +10,7 @@ export default function Availability() {
   const { currentUser } = useAuth();
   const [weekStart, setWeekStart] = useState(defaultAvailabilityWeek());
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [preferred, setPreferred] = useState<Set<string>>(new Set());
   const [note, setNote] = useState('');
   const [dirty, setDirty] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -21,6 +22,7 @@ export default function Availability() {
 
   useEffect(() => {
     setSelected(new Set(existing?.shiftBlockIds ?? []));
+    setPreferred(new Set(existing?.preferredBlockIds ?? []));
     setNote(existing?.note ?? '');
     setDirty(false);
   }, [weekStart, existing?.updatedAt]);
@@ -36,12 +38,21 @@ export default function Availability() {
   const allIds = state.shiftBlocks.map(s => s.id);
   const validSelectedCount = allIds.filter(id => selected.has(id)).length;
 
-  const update = (next: Set<string>) => { setSelected(next); setDirty(true); setSavedFlash(false); };
+  const update = (next: Set<string>, nextPreferred: Set<string> = preferred) => {
+    setSelected(next);
+    setPreferred(new Set([...nextPreferred].filter(id => next.has(id))));
+    setDirty(true);
+    setSavedFlash(false);
+  };
 
+  // Tap cycles: not available → ✓ could → ★ want → not available
   const toggle = (id: string) => {
     const next = new Set(selected);
-    next.has(id) ? next.delete(id) : next.add(id);
-    update(next);
+    const nextPref = new Set(preferred);
+    if (!next.has(id)) next.add(id);
+    else if (!nextPref.has(id)) nextPref.add(id);
+    else { next.delete(id); nextPref.delete(id); }
+    update(next, nextPref);
   };
 
   const toggleDay = (dow: number) => {
@@ -62,6 +73,7 @@ export default function Availability() {
         supervisorName: currentUser.name,
         weekStart,
         shiftBlockIds: allIds.filter(id => selected.has(id)),
+        preferredBlockIds: allIds.filter(id => selected.has(id) && preferred.has(id)),
         note: note.trim() || undefined,
         updatedAt: new Date().toISOString(),
       },
@@ -86,7 +98,7 @@ export default function Availability() {
       <div className="page-header">
         <div>
           <h2>My Availability</h2>
-          <p className="page-subtitle">Tap every shift you could take. Due Wednesday evening — the admin assigns next week's shifts on Thursday.</p>
+          <p className="page-subtitle">Weeks run Friday–Thursday. Tap a shift once for “I could”, twice for “I want to”, a third time to remove it. Due Wednesday evening, the admin plans on Thursday. You get max. 2 shifts per week and max. 1 per day.</p>
         </div>
       </div>
 
@@ -115,8 +127,12 @@ export default function Availability() {
         </div>
       )}
 
+      <div className="avail-legend">
+        <span>✓ I could</span><span>★ I want to</span><span>+ not available</span>
+      </div>
+
       <div className="avail-toolbar">
-        <span className="avail-count"><strong>{validSelectedCount}</strong> of {allIds.length} shifts selected</span>
+        <span className="avail-count"><strong>{validSelectedCount}</strong> of {allIds.length} shifts selected{allIds.filter(id => preferred.has(id)).length ? ` · ★ ${allIds.filter(id => preferred.has(id)).length}` : ''}</span>
         <div className="avail-toolbar-actions">
           <button className="btn-ghost-sm" onClick={() => update(new Set(allIds))} disabled={allIds.length === 0}>Select all</button>
           <button className="btn-ghost-sm" onClick={() => update(new Set())} disabled={validSelectedCount === 0}>Clear</button>
@@ -127,7 +143,8 @@ export default function Availability() {
         <p className="empty-state">No shifts are defined in the shift plan yet.</p>
       ) : (
         <div className="avail-days">
-          {DAY_NAMES.map((day, dow) => {
+          {PERIOD_DAYS.map(dow => {
+            const day = DAY_NAMES[dow];
             const blocks = blocksByDay[dow];
             if (blocks.length === 0) return null;
             const dayCount = blocks.filter(b => selected.has(b.id)).length;
@@ -145,14 +162,17 @@ export default function Availability() {
                 <div className="avail-chips">
                   {blocks.map(b => {
                     const on = selected.has(b.id);
+                    const want = on && preferred.has(b.id);
                     return (
                       <button
                         key={b.id}
-                        className={`avail-chip ${on ? 'avail-chip-on' : ''}`}
+                        className={`avail-chip ${want ? 'avail-chip-want' : on ? 'avail-chip-on' : ''}`}
                         onClick={() => toggle(b.id)}
                         aria-pressed={on}
+                        title={want ? 'I want to (tap to remove)' : on ? 'I could (tap again: I want to)' : 'Not available (tap: I could)'}
+                        aria-label={`${day} ${b.startTime}–${b.endTime}: ${want ? 'I want to' : on ? 'I could' : 'not available'}`}
                       >
-                        <span className="avail-chip-check">{on ? '✓' : '+'}</span>
+                        <span className="avail-chip-check">{want ? '★' : on ? '✓' : '+'}</span>
                         {b.startTime}–{b.endTime}
                       </button>
                     );

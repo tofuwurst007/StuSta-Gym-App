@@ -2,13 +2,16 @@ import { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { DAY_NAMES, getMorningShift } from '../../utils/openingHours';
 import type { ShiftBlock } from '../../types';
-import { blocksForWeek } from '../../utils/assignments';
 import ExcelExportButton from '../../components/ExcelExportButton';
-import { getNextWeekStart, getWeekStart } from '../../utils/week';
+import PlanGrid from '../../components/PlanGrid';
+import WeekSwitcher from '../../components/WeekSwitcher';
+import { PERIOD_DAYS, addWeeks, formatWeekRange, getNextWeekStart, getWeekStart } from '../../utils/week';
+import { PLAN_WEEKS_AHEAD } from './AssignShifts';
 
 export default function ShiftplanEditor() {
   const { state, dispatch } = useApp();
-  const [selectedDay, setSelectedDay] = useState(0);
+  const [weekStart, setWeekStart] = useState(getNextWeekStart());
+  const [selectedDay, setSelectedDay] = useState(PERIOD_DAYS[0]);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ startTime: '', endTime: '' });
   const [error, setError] = useState('');
@@ -16,7 +19,7 @@ export default function ShiftplanEditor() {
   const [editForm, setEditForm] = useState({ startTime: '', endTime: '' });
   const [editError, setEditError] = useState('');
 
-  const dayShifts = blocksForWeek(state.shiftBlocks, state.assignments, getWeekStart())
+  const dayShifts = state.shiftBlocks
     .filter(s => s.dayOfWeek === selectedDay)
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
@@ -61,33 +64,47 @@ export default function ShiftplanEditor() {
   };
 
   const deleteShift = (id: string) => {
+    if (!window.confirm('Delete this shift block? It disappears from every week, including all assignments of it.')) return;
     dispatch({ type: 'DELETE_SHIFT', payload: id });
   };
 
+  const currentWeek = getWeekStart();
 
   return (
     <div className="page">
       <div className="page-header">
-        <h2>Shiftplan Editor</h2>
-        <ExcelExportButton weekStart={getNextWeekStart()} label="⬇ Excel (next week)" />
+        <div>
+          <h2>Shiftplan</h2>
+          <p className="page-subtitle">Weeks run Friday–Thursday. Pick a name in a cell to assign that shift in the selected week.</p>
+        </div>
+        <ExcelExportButton weekStart={weekStart} />
       </div>
 
-      {/* Day tabs */}
-      <div className="day-tabs">
-        {DAY_NAMES.map((day, i) => (
-          <button
-            key={i}
-            className={`day-tab ${selectedDay === i ? 'day-tab-active' : ''}`}
-            onClick={() => setSelectedDay(i)}
-          >
-            {day.slice(0, 3)}
-          </button>
-        ))}
-      </div>
+      <WeekSwitcher weekStart={weekStart} onChange={setWeekStart}
+        minWeek={addWeeks(currentWeek, -1)} maxWeek={addWeeks(currentWeek, PLAN_WEEKS_AHEAD)} />
 
       <section className="section">
+        <h3 className="section-title">Plan {formatWeekRange(weekStart)}</h3>
+        <PlanGrid weekStart={weekStart} />
+      </section>
+
+      <section className="section">
+        <h3 className="section-title">Shift blocks (same every week)</h3>
+        {/* Day tabs */}
+        <div className="day-tabs">
+          {PERIOD_DAYS.map(i => (
+            <button
+              key={i}
+              className={`day-tab ${selectedDay === i ? 'day-tab-active' : ''}`}
+              onClick={() => setSelectedDay(i)}
+            >
+              {DAY_NAMES[i].slice(0, 3)}
+            </button>
+          ))}
+        </div>
+
         <div className="section-header">
-          <h3 className="section-title">{DAY_NAMES[selectedDay]} Shifts</h3>
+          <h3 className="section-title">{DAY_NAMES[selectedDay]}</h3>
           <div className="shift-actions">
             <button
               className="btn-ghost-sm"
@@ -146,13 +163,8 @@ export default function ShiftplanEditor() {
               </div>
             </div>
           ) : (
-            <div key={s.id} className={`shift-row ${s.claimed ? 'shift-claimed' : 'shift-unclaimed'}`}>
+            <div key={s.id} className="shift-row">
               <span className="shift-time">{s.startTime} – {s.endTime}</span>
-              {s.claimed ? (
-                <span className="shift-supervisor" title="This week">{s.supervisorName || 'Covered'} · this week</span>
-              ) : (
-                <span className="shift-unclaimed-label" title="This week">Open this week</span>
-              )}
               <div className="shift-actions">
                 <button className="btn-ghost-sm" onClick={() => startEdit(s)}>Edit</button>
                 <button className="btn-danger-sm" onClick={() => deleteShift(s.id)}>Delete</button>

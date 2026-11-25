@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { DAY_NAMES, getOpeningHoursForDay, isGymOpenNow, getTodayOpeningHours, nowHHMM } from '../utils/openingHours';
 import { localISODate } from '../utils/date';
-import { blocksForWeek } from '../utils/assignments';
-import { getWeekStart } from '../utils/week';
+import { blocksForWeek, blocksOnDate } from '../utils/assignments';
+import { addDays, dayIndex, formatShortDate, getWeekStart } from '../utils/week';
 
 export default function Home() {
   const { state, loading, loadError } = useApp();
@@ -70,16 +70,18 @@ export default function Home() {
         )}
       </section>
 
-      {/* Weekly schedule */}
+      {/* Next 7 days, starting today */}
       <section className="section">
-        <h3 className="section-title">Weekly Schedule</h3>
+        <h3 className="section-title">Next 7 Days</h3>
         <div className="week-grid">
-          {DAY_NAMES.map((day, dow) => {
-            const slots = getOpeningHoursForDay(dow, weekBlocks, state.spontaneousOpenings, dow === todayDow ? today : undefined);
-            const isToday = dow === todayDow;
+          {Array.from({ length: 7 }, (_, i) => addDays(new Date(), i)).map((date, i) => {
+            const dow = dayIndex(date);
+            const slots = getOpeningHoursForDay(dow, blocksOnDate(state.shiftBlocks, state.assignments, date),
+              state.spontaneousOpenings, localISODate(date));
+            const isToday = i === 0;
             return (
-              <div key={dow} className={`day-card ${isToday ? 'day-today' : ''}`}>
-                <p className="day-name">{day}</p>
+              <div key={i} className={`day-card ${isToday ? 'day-today' : ''}`}>
+                <p className="day-name">{DAY_NAMES[dow]} <span className="day-date">{formatShortDate(date)}</span></p>
                 {slots.length === 0 ? (
                   <p className="day-closed">Closed</p>
                 ) : (

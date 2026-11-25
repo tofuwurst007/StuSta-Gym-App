@@ -1,5 +1,5 @@
 import type { ShiftAssignment, ShiftBlock } from '../types';
-import { addWeeks, getWeekStart } from './week';
+import { addWeeks, dayIndex, getWeekStart } from './week';
 
 // Weeks loaded from the server, relative to the current week
 export const ASSIGNMENT_WEEKS_BACK = 4;
@@ -18,6 +18,13 @@ export function blocksForWeek(blocks: ShiftBlock[], assignments: ShiftAssignment
     const a = byBlock.get(b.id);
     return { ...b, claimed: !!a, supervisorId: a?.supervisorId, supervisorName: a?.supervisorName };
   });
+}
+
+/** The blocks of one calendar date, with the coverage of the period that date belongs to. */
+export function blocksOnDate(blocks: ShiftBlock[], assignments: ShiftAssignment[], date: Date): ShiftBlock[] {
+  const dow = dayIndex(date);
+  return blocksForWeek(blocks.filter(b => b.dayOfWeek === dow), assignments, getWeekStart(date))
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
 }
 
 /** Proposals to repeat last week's plan in `weekStart`: only for blocks that are still open there. */

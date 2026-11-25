@@ -2,12 +2,13 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { exportShiftsICS, exportSpontaneousICS, googleCalendarLink } from '../utils/calendarExport';
 import { localISODate } from '../utils/date';
-import { blocksForWeek } from '../utils/assignments';
+import { blocksOnDate } from '../utils/assignments';
+import { dayIndex } from '../utils/week';
 
 const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const HOUR_START = 6;
-const HOUR_END   = 22;
+const HOUR_END   = 23; // the last shift ends at 23:00
 const HOURS      = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i);
 
 function timeToY(time: string, hourPx: number, base = HOUR_START): number {
@@ -20,25 +21,16 @@ function timeToPx(start: string, end: string, hourPx: number): number {
   return ((he - hs) + (me - ms) / 60) * hourPx;
 }
 
-/** Returns the Monday of the ISO week containing `date` */
-function weekStart(date: Date): Date {
-  const d = new Date(date);
-  const day = (d.getDay() + 6) % 7; // Mon = 0
-  d.setDate(d.getDate() - day);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 function addDays(date: Date, n: number): Date {
   const d = new Date(date);
   d.setDate(d.getDate() + n);
   return d;
 }
 
-function fmtWeekRange(monday: Date): string {
-  const sunday = addDays(monday, 6);
+function fmtRange(first: Date): string {
+  const last = addDays(first, 6);
   const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
-  return `${monday.toLocaleDateString('en-DE', opts)} – ${sunday.toLocaleDateString('en-DE', opts)}`;
+  return `${first.toLocaleDateString('en-DE', opts)} – ${last.toLocaleDateString('en-DE', opts)}`;
 }
 
 export default function WeeklyCalendar() {
@@ -48,14 +40,13 @@ export default function WeeklyCalendar() {
   const nowLineRef = useRef<HTMLDivElement>(null);
   const bodyRef    = useRef<HTMLDivElement>(null);
 
-  // Responsive hour height: smaller on mobile so entire day fits without scrolling
-  const hourPx = useMemo(() => window.innerWidth < 768 ? 28 : 56, []);
+  // Compact hour height, so the whole day fits on one screen (shifts are 2 h blocks)
+  const hourPx = useMemo(() => window.innerWidth < 768 ? 28 : 30, []);
 
+  // Seven days starting today (not Mon–Sun); each day takes its coverage from its own plan week
   const today    = new Date();
-  const baseMonday = weekStart(today);
-  const monday   = addDays(baseMonday, offset * 7);
+  const first    = addDays(new Date(today.getFullYear(), today.getMonth(), today.getDate()), offset * 7);
   const isCurrentWeek = offset === 0;
-  const weekBlocks = blocksForWeek(state.shiftBlocks, state.assignments, localISODate(monday));
 
   // Scroll to current time on mount (desktop only — mobile shows full day)
   useEffect(() => {
@@ -84,7 +75,7 @@ export default function WeeklyCalendar() {
         <button className="btn-ghost-sm" onClick={() => setOffset(o => o - 1)}>‹ Prev</button>
         <button className="btn-ghost-sm" onClick={() => setOffset(0)} disabled={offset === 0}>Today</button>
         <button className="btn-ghost-sm" onClick={() => setOffset(o => o + 1)}>Next ›</button>
-        <span className="cal-week-label">{fmtWeekRange(monday)}</span>
+        <span className="cal-week-label">{fmtRange(first)}</span>
         <button
           className="btn-ghost-sm"
           title="Export to .ics (importable into Google / Apple / Outlook Calendar)"
@@ -107,12 +98,12 @@ export default function WeeklyCalendar() {
         <div className="cal-header">
           <div className="cal-header-cell" />
           {Array.from({ length: 7 }, (_, i) => {
-            const d = addDays(monday, i);
+            const d = addDays(first, i);
             const ds = localISODate(d);
             const isTdy = ds === todayStr;
             return (
               <div key={i} className={`cal-header-cell ${isTdy ? 'cal-today' : ''}`}>
-                {DAY_SHORT[i]}
+                {DAY_SHORT[dayIndex(d)]}
                 {isTdy
                   ? <span className="cal-header-date">{d.getDate()}</span>
                   : <span className="cal-header-date" style={{ fontSize: 16 }}>{d.getDate()}</span>
@@ -134,13 +125,15 @@ export default function WeeklyCalendar() {
           </div>
 
           {/* Day columns */}
-          {Array.from({ length: 7 }, (_, dow) => {
-            const colDate = localISODate(addDays(monday, dow));
+          {Array.from({ length: 7 }, (_, col) => {
+            const colDay  = addDays(first, col);
+            const colDate = localISODate(colDay);
+            const dayBlocks = blocksOnDate(state.shiftBlocks, state.assignments, colDay);
 
             // Claimed shift blocks for this dow
             // (supervisor names are only loaded for staff; members just see "Gym Open")
-            const shiftEvents = weekBlocks
-              .filter(s => s.dayOfWeek === dow && s.claimed)
+            const shiftEvents = dayBlocks
+              .filter(s => s.claimed)
               .map(s => ({
                 id: s.id,
                 start: s.startTime,
@@ -157,8 +150,8 @@ export default function WeeklyCalendar() {
               }));
 
             // Free (unclaimed) blocks for this dow
-            const freeEvents = weekBlocks
-              .filter(s => s.dayOfWeek === dow && !s.claimed)
+            const freeEvents = dayBlocks
+              .filter(s => !s.claimed)
               .map(s => ({
                 id: s.id + '-free',
                 start: s.startTime,
@@ -190,7 +183,7 @@ export default function WeeklyCalendar() {
             const isTdy = colDate === todayStr;
 
             return (
-              <div key={dow} className="cal-day-col" style={{ background: isTdy ? 'var(--accent-dim)' : undefined }}>
+              <div key={col} className="cal-day-col" style={{ background: isTdy ? 'var(--accent-dim)' : undefined }}>
                 {/* Hour grid lines */}
                 {HOURS.map(h => (
                   <div key={h} className="cal-hour-line" />

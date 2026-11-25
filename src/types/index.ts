@@ -28,7 +28,7 @@ export interface ShiftBlock {
 
 export interface ShiftAssignment {
   shiftBlockId: string;
-  weekStart: string;       // YYYY-MM-DD, Monday
+  weekStart: string;       // YYYY-MM-DD, Friday the period starts on
   supervisorId?: string;   // only loaded for supervisors/admins
   supervisorName?: string;
 }
@@ -64,8 +64,9 @@ export interface Availability {
   id: string;
   supervisorId: string;
   supervisorName: string;
-  weekStart: string;       // YYYY-MM-DD, always a Monday
-  shiftBlockIds: string[];
+  weekStart: string;       // YYYY-MM-DD, always a Friday (periods run Fri–Thu)
+  shiftBlockIds: string[];       // every shift they could take
+  preferredBlockIds?: string[];  // subset they would like most
   note?: string;
   updatedAt: string;
 }
